@@ -309,7 +309,7 @@ class ibPriceClient(ibContractsClient):
 
         duration_lookup = dict(
             [
-                (Frequency.Day, "1 Y"),
+                (Frequency.Day, "3 Y"),
                 (Frequency.Hour, "1 M"),
                 (Frequency.Minutes_15, "1 W"),
                 (Frequency.Minutes_5, "1 W"),
