@@ -135,6 +135,9 @@ def add_datetime_index(
 
     def left(x: str, n):
         return x[:n]
+    
+    if len(date_format) > len(DEFAULT_DATE_FORMAT_FOR_CSV):
+        expected_length_of_date = EXPECTED_LENGTH_OF_DATE + 5
 
     date_index = date_index.apply(left, n=expected_length_of_date)
     df.index = pd.to_datetime(date_index, format=date_format).values
