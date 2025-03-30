@@ -28,3 +28,5 @@ venv/
 
 # libreoffice
 .~lock.*
+
+data/backups_csv/contract_prices/*.csv
