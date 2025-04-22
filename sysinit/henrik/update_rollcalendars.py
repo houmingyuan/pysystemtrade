@@ -38,6 +38,7 @@ def main():
     instrument_list = barchart_config["download_list"]
 
     for instrument_code in instrument_list:
+        print("build calendar for %s" % instrument_code)
         build_and_write_roll_calendar(instrument_code, 
                                     output_datapath=roll_calendars_path, 
                                     check_before_writing=False)
