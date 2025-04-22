@@ -23,7 +23,7 @@ def _get_data_inputs(csv_adj_data_path):
 
 
 def process_adjusted_prices_all_instruments(
-    csv_adj_data_path=arg_not_supplied, ADD_TO_DB=True, ADD_TO_CSV=False
+    csv_adj_data_path=arg_not_supplied, ADD_TO_DB=True, ADD_TO_CSV=False, MERGE_ADJUSTED_PRICES=False
 ):
     db_multiple_prices, _notused, _alsonotused = _get_data_inputs(csv_adj_data_path)
     instrument_list = db_multiple_prices.get_list_of_instruments()
@@ -34,6 +34,7 @@ def process_adjusted_prices_all_instruments(
             csv_adj_data_path=csv_adj_data_path,
             ADD_TO_DB=ADD_TO_DB,
             ADD_TO_CSV=ADD_TO_CSV,
+            MERGE_ADJUSTED_PRICES=MERGE_ADJUSTED_PRICES,
         )
 
 
@@ -43,6 +44,7 @@ def process_adjusted_prices_single_instrument(
     multiple_prices=arg_not_supplied,
     ADD_TO_DB=True,
     ADD_TO_CSV=False,
+    MERGE_ADJUSTED_PRICES=False,
 ):
     (
         db_multiple_prices,
@@ -59,11 +61,11 @@ def process_adjusted_prices_single_instrument(
 
     if ADD_TO_DB:
         db_adjusted_prices.add_adjusted_prices(
-            instrument_code, adjusted_prices, ignore_duplication=True
+            instrument_code, adjusted_prices, ignore_duplication=True, merge_adjusted_prices=MERGE_ADJUSTED_PRICES
         )
     if ADD_TO_CSV:
         csv_adjusted_prices.add_adjusted_prices(
-            instrument_code, adjusted_prices, ignore_duplication=True
+            instrument_code, adjusted_prices, ignore_duplication=True, merge_adjusted_prices=MERGE_ADJUSTED_PRICES
         )
 
     return adjusted_prices
@@ -73,5 +75,5 @@ if __name__ == "__main__":
     input("Will overwrite existing prices are you sure?! CTL-C to abort")
     # modify flags and datapath as required
     process_adjusted_prices_all_instruments(
-        csv_adj_data_path=arg_not_supplied, ADD_TO_DB=True, ADD_TO_CSV=True
+        csv_adj_data_path=arg_not_supplied, ADD_TO_DB=True, ADD_TO_CSV=True, MERGE_ADJUSTED_PRICES=False
     )

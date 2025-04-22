@@ -72,3 +72,18 @@ class parquetFuturesAdjustedPricesData(futuresAdjustedPricesData):
             % (len(adjusted_price_data), instrument_code, str(self)),
             instrument_code=instrument_code,
         )
+    
+    def _merge_adjusted_prices(
+        self, instrument_code:str, adjusted_price_data: futuresAdjustedPrices
+    ):
+        raw_price_df = self._get_adjusted_prices_without_checking(instrument_code)
+        
+        # add entry datetime > last datetime of raw_price_df 
+        last_datetime = raw_price_df.index[-1]
+        adjusted_price_data = adjusted_price_data[adjusted_price_data.index > last_datetime]
+        merged_df = pd.concat([raw_price_df, adjusted_price_data])
+                
+        self._add_adjusted_prices_without_checking_for_existing_entry(
+            instrument_code, merged_df
+        )
+        

@@ -68,12 +68,23 @@ class futuresAdjustedPricesData(baseData):
             return True
         else:
             return False
-
+        
+    def merge_adjusted_prices(
+        self, instrument_code:str, adjusted_price_data: futuresAdjustedPrices
+    ):
+        self._merge_adjusted_prices(instrument_code, adjusted_price_data)
+        
+        self.log.info(
+            "Merged adjusted prices for %s" % instrument_code,
+            instrument_code=instrument_code,
+        )
+        
     def add_adjusted_prices(
         self,
         instrument_code: str,
         adjusted_price_data: futuresAdjustedPrices,
         ignore_duplication: bool = False,
+        merge_adjusted_prices: bool = False,
     ):
         if self.is_code_in_data(instrument_code):
             if ignore_duplication:
@@ -84,15 +95,22 @@ class futuresAdjustedPricesData(baseData):
                     % instrument_code,
                     instrument_code=instrument_code,
                 )
-
-        self._add_adjusted_prices_without_checking_for_existing_entry(
-            instrument_code, adjusted_price_data
-        )
+        if merge_adjusted_prices:
+            self.merge_adjusted_prices(instrument_code, adjusted_price_data)
+        else:
+            self._add_adjusted_prices_without_checking_for_existing_entry(
+                instrument_code, adjusted_price_data
+            )
 
         self.log.info(
             "Added data for instrument %s" % instrument_code,
             instrument_code=instrument_code,
         )
+        
+    def _merge_adjusted_prices(
+        self, instrument_code:str, adjusted_price_data: futuresAdjustedPrices
+    ):
+        raise NotImplementedError(USE_CHILD_CLASS_ERROR)
 
     def _add_adjusted_prices_without_checking_for_existing_entry(
         self, instrument_code: str, adjusted_price_data: futuresAdjustedPrices
