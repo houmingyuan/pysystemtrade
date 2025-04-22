@@ -29,6 +29,10 @@ def seed_price_data_from_IB(instrument_code):
         contract_object = futuresContract(instrument_code, date_str)
 
         seed_price_data_for_contract(data=data, contract_object=contract_object)
+    
+    data.log.info("Finished seeding price data from IB for %s" % instrument_code)
+    data.log.info(data)
+    return data
 
 
 def seed_price_data_for_contract(data: dataBlob, contract_object: futuresContract):
