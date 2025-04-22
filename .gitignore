@@ -30,3 +30,4 @@ venv/
 .~lock.*
 
 data/backups_csv/contract_prices/*.csv
+data/futures/roll_calendars_csv/new/*.csv
