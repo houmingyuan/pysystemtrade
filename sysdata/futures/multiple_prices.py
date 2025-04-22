@@ -78,12 +78,23 @@ class futuresMultiplePricesData(baseData):
             return True
         else:
             return False
+    
+    def merge_multiple_prices(
+        self,
+        instrument_code: str,
+        multiple_price_data: futuresMultiplePrices,
+    ):
+        self._merge_multiple_prices(instrument_code, multiple_price_data)
+        self.log.info("Merged multiple prices for %s" % instrument_code,
+                      instrument_code=instrument_code,
+        )
 
     def add_multiple_prices(
         self,
         instrument_code: str,
         multiple_price_data: futuresMultiplePrices,
         ignore_duplication=False,
+        merge_flag = False,
     ):
         log_attrs = {INSTRUMENT_CODE_LOG_LABEL: instrument_code, "method": "temp"}
         if self.is_code_in_data(instrument_code):
@@ -97,11 +108,19 @@ class futuresMultiplePricesData(baseData):
                 )
                 raise existingData
 
-        self._add_multiple_prices_without_checking_for_existing_entry(
-            instrument_code, multiple_price_data
-        )
+        if merge_flag:
+            self.merge_multiple_prices(instrument_code, multiple_price_data)
+        else:
+            self._add_multiple_prices_without_checking_for_existing_entry(
+                instrument_code, multiple_price_data
+            )
 
         self.log.info("Added data for instrument %s" % instrument_code, **log_attrs)
+
+    def _merge_multiple_prices(
+        self, instrument_code: str, multiple_price_data_object: futuresMultiplePrices
+    ):
+        raise NotImplementedError(USE_CHILD_CLASS_ERROR)
 
     def _add_multiple_prices_without_checking_for_existing_entry(
         self, instrument_code: str, multiple_price_data: futuresMultiplePrices

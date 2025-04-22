@@ -60,6 +60,17 @@ class parquetFuturesMultiplePricesData(futuresMultiplePricesData):
         self.log.debug(
             "Deleted multiple prices for %s from %s" % (instrument_code, str(self))
         )
+        
+    def _merge_multiple_prices(
+        self, instrument_code: str, multiple_price_data_object: futuresMultiplePrices
+    ):
+        existing_multiple_prices = self._get_multiple_prices_without_checking(instrument_code)
+        
+        last_datetime = existing_multiple_prices.index[-1]
+        multiple_price_data_object = multiple_price_data_object[multiple_price_data_object.index > last_datetime]
+        merged_multiple_prices = pd.concat([existing_multiple_prices, multiple_price_data_object])
+        
+        self._add_multiple_prices_without_checking_for_existing_entry(instrument_code, merged_multiple_prices)
 
     def _add_multiple_prices_without_checking_for_existing_entry(
         self, instrument_code: str, multiple_price_data_object: futuresMultiplePrices

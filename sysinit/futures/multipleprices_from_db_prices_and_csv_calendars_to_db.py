@@ -51,6 +51,7 @@ def process_multiple_prices_all_instruments(
     csv_roll_data_path=arg_not_supplied,
     ADD_TO_DB=True,
     ADD_TO_CSV=False,
+    MERGE_FLAG=False,
 ):
     (
         _not_used1,
@@ -70,6 +71,7 @@ def process_multiple_prices_all_instruments(
             csv_roll_data_path=csv_roll_data_path,
             ADD_TO_DB=ADD_TO_DB,
             ADD_TO_CSV=ADD_TO_CSV,
+            MERGE_FLAG=MERGE_FLAG,
         )
 
 
@@ -83,6 +85,7 @@ def process_multiple_prices_single_instrument(
     roll_calendar=arg_not_supplied,
     ADD_TO_DB=True,
     ADD_TO_CSV=False,
+    MERGE_FLAG=False,
 ):
     if target_instrument_code is arg_not_supplied:
         target_instrument_code = instrument_code
@@ -128,7 +131,7 @@ def process_multiple_prices_single_instrument(
 
     if ADD_TO_DB:
         db_multiple_prices.add_multiple_prices(
-            target_instrument_code, multiple_prices, ignore_duplication=True
+            target_instrument_code, multiple_prices, ignore_duplication=True, merge_flag=MERGE_FLAG
         )
     if ADD_TO_CSV:
         csv_multiple_prices.add_multiple_prices(

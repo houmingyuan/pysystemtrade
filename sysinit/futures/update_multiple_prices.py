@@ -11,4 +11,5 @@ if __name__ == "__main__":
     process_multiple_prices_all_instruments(
         csv_multiple_data_path=csv_multiple_data_path,
         csv_roll_data_path=csv_roll_data_path,
+        MERGE_FLAG=True,
     )
