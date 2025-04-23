@@ -1,5 +1,7 @@
 from copy import copy
 from matplotlib.pyplot import title
+import matplotlib.pyplot as plt
+import nbformat
 import datetime
 
 import pandas as pd
@@ -152,3 +154,74 @@ def nice_format_instrument_risk_table(
     )
 
     return instrument_risk_data
+
+def plot_total_assets(asset_series: pd.Series,
+                      title: str = "Total Assets Over Time",
+                      ma_days: int = 30,
+                      currency: str = "HKD",
+                      use_plotly: bool = False, 
+                      start_date: datetime.datetime = arg_not_supplied,
+                      end_date: datetime.datetime = arg_not_supplied):
+    """
+    资产总额可视化函数（静态或交互式）
+    
+    Parameters:
+    - asset_series: pd.Series，index 为日期，值为资产总额
+    - title: 图表标题
+    - ma_days: 移动平均窗口天数
+    - currency: 币种标注（如 "CNY", "USD"）
+    - use_plotly: 是否使用 Plotly 交互图（默认 False）
+    """
+    if not isinstance(asset_series.index, pd.DatetimeIndex):
+        raise ValueError("asset_series 的 index 必须为 DatetimeIndex")
+    
+    if start_date is not arg_not_supplied:
+        asset_series = asset_series[start_date:]
+    if end_date is not arg_not_supplied:
+        asset_series = asset_series[:end_date]
+
+    # 平滑趋势线
+    ma_series = asset_series.rolling(window=ma_days).mean()
+
+    if use_plotly:
+        import plotly.graph_objects as go
+
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(x=asset_series.index, y=asset_series,
+                                 mode='lines', name='Total Assets',
+                                 line=dict(color='blue')))
+        fig.add_trace(go.Scatter(x=ma_series.index, y=ma_series,
+                                 mode='lines', name=f'{ma_days}-day MA',
+                                 line=dict(color='orange', dash='dash')))
+        fig.update_layout(title=title,
+                          xaxis_title="Date",
+                          yaxis_title=f"Amount ({currency})",
+                          template="plotly_white")
+        fig.show()
+
+    else:
+        plt.style.use("seaborn-v0_8-whitegrid")
+        fig, ax = plt.subplots(figsize=(14, 6))
+
+        asset_series.plot(ax=ax, color='navy', linewidth=2, label='Total Assets')
+        ma_series.plot(ax=ax, color='orange', linestyle='--', linewidth=1.5, label=f'{ma_days}-day MA')
+
+        # 高点注释
+        max_val = asset_series.max()
+        max_date = asset_series.idxmax()
+        ax.annotate(f"Peak: {max_val:,.0f} {currency}",
+                    xy=(max_date, max_val),
+                    xytext=(max_date, max_val * 1.05),
+                    arrowprops=dict(arrowstyle='->', color='gray'),
+                    fontsize=10)
+
+        # 日期格式优化
+       
+        ax.set_title(title, fontsize=18, fontweight='bold')
+        ax.set_xlabel("Date", fontsize=12)
+        ax.set_ylabel(f"Amount ({currency})", fontsize=12)
+        ax.legend()
+        ax.grid(True, alpha=0.3)
+        fig.autofmt_xdate()
+        plt.tight_layout()
+        plt.show()
