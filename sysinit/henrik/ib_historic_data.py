@@ -1,4 +1,4 @@
-from ib_insync import *
+from ib_async import *
 # util.startLoop()  # uncomment this line when in a notebook
 
 ib = IB()

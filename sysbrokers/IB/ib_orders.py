@@ -1,4 +1,4 @@
-from ib_insync import Trade as ibTrade
+from ib_async import Trade as ibTrade, OrderStatus as ibOrderStatus
 
 from sysbrokers.IB.ib_futures_contracts_data import ibFuturesContractData
 from sysbrokers.IB.ib_instruments_data import ibFuturesInstrumentData
@@ -144,7 +144,7 @@ class ibExecutionStackData(brokerExecutionStackData):
 
         :return: list of brokerOrder objects
         """
-        list_of_control_objects = self._get_list_of_broker_control_orders(
+        list_of_control_objects = self.get_list_of_broker_control_orders(
             account_id=account_id
         )
         order_list = [
@@ -158,7 +158,7 @@ class ibExecutionStackData(brokerExecutionStackData):
     def _get_dict_of_broker_control_orders(
         self, account_id: str = arg_not_supplied
     ) -> dict:
-        control_order_list = self._get_list_of_broker_control_orders(
+        control_order_list = self.get_list_of_broker_control_orders(
             account_id=account_id
         )
         dict_of_control_orders = dict(
@@ -169,7 +169,7 @@ class ibExecutionStackData(brokerExecutionStackData):
         )
         return dict_of_control_orders
 
-    def _get_list_of_broker_control_orders(
+    def get_list_of_broker_control_orders(
         self, account_id: str = arg_not_supplied
     ) -> list:
         """
@@ -438,7 +438,9 @@ class ibExecutionStackData(brokerExecutionStackData):
         self, broker_order_with_controls: ibOrderWithControls
     ) -> bool:
         status = self.get_status_for_control_object(broker_order_with_controls)
-        cancellation_status = status == "Cancelled"
+        cancellation_status = (
+            status in ibOrderStatus.DoneStates and status != ibOrderStatus.Filled
+        )
 
         return cancellation_status
 
