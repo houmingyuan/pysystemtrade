@@ -20,8 +20,10 @@
 ### 工作登记约定
 
 - 在本仓库执行的每项工作都要在 Linear 登记：开工前先查 Future Trading 项目里是否已有对应 issue，没有则新建，避免重复登记。
-- 状态随进展更新：Todo → In Progress → In Review → Done；工作完成即置为 Done。
+- **开工时先建 issue 并置为 In Progress**，把计划做的事写进描述；工作过程中如有偏差，说明实际做法；**完成后把状态更新为 Done**，并在收尾时说明最终结果。
+- 不要把 issue 建成即 Done——除非任务在登记时确实已经完成，且没有可拆分的过程工作。
 - issue 标题与描述使用中文，描述至少包含三部分：目标、完成内容、交付物（写明仓库内文件路径）。
+- **凡由 Codex 创建或处理的 issue，一律打上 `codex` 标签**，便于区分人工与 agent 的工作；创建 issue 时在 labels 里带上它。
 - 团队 Firestone（key `FIR`）的关键 ID：
   - teamId `2fae9868-2e43-4bb0-b3ce-ca77829195ad`
   - projectId（Future Trading）`80f281b2-7c27-4998-9e80-7ea04b477b73`
