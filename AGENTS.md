@@ -16,3 +16,13 @@
 - 需要读写 issue、项目、里程碑时，使用名为 `linear` 的 MCP 服务器（`https://mcp.linear.app/mcp`）。
 - 未指明项目时，默认在 **Future Trading** 项目下操作。
 - 同一工作区下还有 `alpha-invest`（`6cf31384-a6ff-4b8e-9a75-08f9dfe3397f`）与 `高尔夫辅助训练系统`（`464462ab-8a32-44b6-bf28-febc23eafe71`）两个项目，仅在用户明确指定时使用。
+
+### 工作登记约定
+
+- 在本仓库执行的每项工作都要在 Linear 登记：开工前先查 Future Trading 项目里是否已有对应 issue，没有则新建，避免重复登记。
+- 状态随进展更新：Todo → In Progress → In Review → Done；工作完成即置为 Done。
+- issue 标题与描述使用中文，描述至少包含三部分：目标、完成内容、交付物（写明仓库内文件路径）。
+- 团队 Firestone（key `FIR`）的关键 ID：
+  - teamId `2fae9868-2e43-4bb0-b3ce-ca77829195ad`
+  - projectId（Future Trading）`80f281b2-7c27-4998-9e80-7ea04b477b73`
+  - stateId：Todo `c6fca1c8-ea50-4775-8b36-c388f78468d9`、In Progress `d7cf0fdf-a533-42c2-b7d2-b9e3076ac262`、In Review `7f13bd76-e850-426c-ac00-d3989e1de54b`、Done `39352f93-f5b1-4f51-bbc8-9a61bda04a48`
