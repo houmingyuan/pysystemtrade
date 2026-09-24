@@ -1,0 +1,141 @@
+#!/bin/zsh
+# systrade 每日数据更新
+#
+# 数据源约定，详见 docs/data_principles_cn.md：
+#   * 历史价格来自 Norgate，已一次性回填完成，因此本脚本不再走 barchart
+#   * 每日增量统一从 IB 取：期货合约价格 + 汇率
+#   * 一个品种只有一个价格来源，所以本脚本不引入第二个来源
+#
+# 步骤：
+#   1. 等外置卷挂载
+#   2. 采样合约             sysproduction.run_daily_contract_sampling
+#      （IB 价格更新依赖采样合约表；表为空时 update_historical_prices 会空转且退出码为 0）
+#   3. IB 期货合约价格      sysproduction.update_historical_prices
+#   4. multiple prices      sysinit/henrik/update_multiple_prices_tolerant.py
+#   5. adjusted prices      sysinit/henrik/update_adjusted_prices_tolerant.py
+#   6. IB 汇率              sysproduction.update_fx_prices
+#
+# 用法：
+#   run_daily_data_update                  # 全部步骤
+#   run_daily_data_update --skip-futures   # 只更新汇率
+#   run_daily_data_update --skip-fx        # 只更新期货链路
+#
+# 由 ~/Library/LaunchAgents/com.henrik.systrade.update.plist 调度，
+# 每日 08:00 运行。全部路径写绝对路径，不依赖 PATH / ~ 软链接 / conda activate。
+
+set -u
+
+# ---------- 固定路径 ----------
+PY=/Users/henrik/miniconda3/envs/invest/bin/python
+PST_DIR=/Users/henrik/dev/pysystemtrade
+DATA_ROOT=/Volumes/data/systrade
+LOG_DIR=$DATA_ROOT/log
+LOG_FILE=$LOG_DIR/update_$(date +%Y%m%d).log
+VOLUME_WAIT_SECS=1800          # 等待外置卷挂载的最长时间（秒）
+VOLUME_CHECK_INTERVAL=30
+
+# ---------- 默认开关 ----------
+UPDATE_FUTURES=true
+UPDATE_FX=true
+
+# ---------- 日志（卷未挂载前只输出到终端，launchd 会收进本地日志） ----------
+log() {
+    local level=$1
+    local message=$2
+    local timestamp=$(date "+%Y-%m-%d %H:%M:%S")
+    if [ -d "$LOG_DIR" ]; then
+        echo "[$timestamp] [$level] $message" | tee -a "$LOG_FILE"
+    else
+        echo "[$timestamp] [$level] $message"
+    fi
+}
+
+# ---------- 中断可追溯 ----------
+trap 'log "ERROR" "脚本被外部终止 (term/int/hup)，中断于上述最后一条日志之后"; exit 143' TERM INT HUP
+trap 'rc=$?; log "INFO" "脚本退出，退出码 $rc"' EXIT
+
+show_help() {
+    echo "Usage: $0 [options]"
+    echo "Options:"
+    echo "  -f, --skip-futures     Skip updating futures data"
+    echo "  -x, --skip-fx          Skip updating forex data"
+    echo "  -h, --help             Show this help message"
+    exit 0
+}
+
+# ---------- 参数解析 ----------
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        -f|--skip-futures) UPDATE_FUTURES=false; shift ;;
+        -x|--skip-fx)      UPDATE_FX=false;      shift ;;
+        -h|--help)         show_help ;;
+        *)
+            log "ERROR" "Unknown option: $1"
+            show_help
+            ;;
+    esac
+done
+
+# ---------- 前置检查 ----------
+if [ ! -x "$PY" ]; then
+    log "ERROR" "Python 解释器不存在: $PY"
+    exit 1
+fi
+if [ ! -d "$PST_DIR" ]; then
+    log "ERROR" "找不到仓库目录: $PST_DIR"
+    exit 1
+fi
+
+waited=0
+while [ ! -d "$DATA_ROOT/parquet" ]; do
+    if [ $waited -ge $VOLUME_WAIT_SECS ]; then
+        log "ERROR" "外置卷未挂载（$DATA_ROOT/parquet 不存在），已等待 ${VOLUME_WAIT_SECS}s，放弃"
+        exit 1
+    fi
+    [ $waited -eq 0 ] && echo "[$(date '+%Y-%m-%d %H:%M:%S')] [WARN] 等待外置卷挂载: $DATA_ROOT"
+    sleep $VOLUME_CHECK_INTERVAL
+    waited=$((waited + VOLUME_CHECK_INTERVAL))
+done
+
+mkdir -p "$LOG_DIR"
+cd "$PST_DIR" || exit 1
+log "INFO" "Starting update process"
+
+# ---------- 步骤执行：单个步骤失败不阻断后续步骤，最后统一汇总 ----------
+FAILED_STEPS=()
+
+run_step() {
+    local name=$1
+    shift
+    log "INFO" ">>> $name"
+    if "$@" >> "$LOG_FILE" 2>&1; then
+        log "INFO" "$name 完成"
+    else
+        local rc=$?
+        log "ERROR" "$name 失败（退出码 $rc）"
+        FAILED_STEPS+=("$name")
+    fi
+}
+
+# ---------- 期货链路：IB 合约价格 -> multiple -> adjusted ----------
+if [ "$UPDATE_FUTURES" = true ]; then
+    run_step "采样合约" "$PY" -u -m sysproduction.run_daily_contract_sampling
+    run_step "IB 期货合约价格" "$PY" -u -m sysproduction.update_historical_prices
+    # 容错版：逐品种 try/except，单品种失败不中断整轮（上游版本会整体中止）
+    run_step "multiple prices" "$PY" -u "$PST_DIR/sysinit/henrik/update_multiple_prices_tolerant.py" --allow-failures
+    run_step "adjusted prices" "$PY" -u "$PST_DIR/sysinit/henrik/update_adjusted_prices_tolerant.py" --allow-failures
+fi
+
+# ---------- 汇率：IB ----------
+if [ "$UPDATE_FX" = true ]; then
+    run_step "IB 汇率" "$PY" -u -m sysproduction.update_fx_prices
+fi
+
+# ---------- 汇总 ----------
+if [ ${#FAILED_STEPS[@]} -eq 0 ]; then
+    log "INFO" "Update process completed successfully"
+    exit 0
+else
+    log "ERROR" "Update process finished with failures: ${FAILED_STEPS[*]}"
+    exit 1
+fi
