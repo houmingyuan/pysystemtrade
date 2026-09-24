@@ -33,6 +33,12 @@ ACCEPTABLE_LAG_DAYS = 30
 
 # How many years gap at start of roll calendar is acceptable
 # (Early futures data is often sparse, so some gap is normal)
+#
+# Known exception: EUA reports a 3.9 year start gap. The Norgate export has no
+# EUA contract earlier than 20081200, and the instrument rolls annual December
+# contracts, so the earliest possible roll is 20081200 -> 20091200 on
+# 2009-03-20. The gap is a property of the source data, not a defect, and is
+# deliberately left visible in the report.
 ACCEPTABLE_START_GAP_YEARS = 3
 
 
