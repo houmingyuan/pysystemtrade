@@ -18,7 +18,10 @@ AUD-SGX,SGX Australian Dollar in US Dollar Futures,25000,USD,FX,2.85,0,0,ASIA
 AUDCAD,Australlian dollar CAD,200000,CAD,FX,0,0,0,US
 AUDJPY,Australlian dollar Yen CME,200000,JPY,FX,329.4,0,0,US
 AUDJPY-SGX,SGX Australian Dollar in Japanese Yen Futures,25000,JPY,FX,285,0,0,ASIA
+AUS10,ASX 10 year bond,1000,AUD,Bond,0,0,0,ASIA
+AUS3,ASX 3 year bond,1000,AUD,Bond,0,0,0,ASIA
 AUSCASH,30 Day Interbank Cash Rate,2466,AUD,STIR,4.5,0,0,ASIA
+AUS_BILL90,ASX 90 day bank bill,2466,AUD,STIR,0,0,0,ASIA
 BARLEY,Barley Futures (ASX),20,AUD,Ags,0,0,0,ASIA
 BB3M,Three-Month Bloomberg Short-Term Bank Yield,2500,USD,Bond,2.12,0,0,US
 BBCOMM,Bloomberg Commodity Index,100,USD,Ags,1.87,0,0,US

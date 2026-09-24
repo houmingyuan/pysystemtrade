@@ -99,7 +99,7 @@ def create_merged_prices(contract):
 if __name__ == "__main__":
     input("Will overwrite existing prices are you sure?! CTL-C to abort")
     # modify flags as required
-    datapath = "*** NEED TO DEFINE A DATAPATH***"
+    datapath = "/Users/henrik/data/norgate_export"
     init_db_with_csv_futures_contract_prices(datapath)
     # init_db_with_csv_futures_contract_prices(datapath, frequency=HOURLY_FREQ)
     # init_db_with_csv_futures_contract_prices(datapath, frequency=DAILY_PRICE_FREQ)
