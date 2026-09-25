@@ -1,6 +1,6 @@
 This document is specifically about using pysystemtrade to connect with *Interactive Brokers (IB)*
 
-As of version 0.28.0, this requires the [ib-insync](https://github.com/erdewit/ib_insync) library. In April 2026, we switched to [ib_async](https://github.com/ib-api-reloaded/ib_async).
+As of version 0.28.0, this requires an IB python library. It was originally [ib-insync](https://github.com/erdewit/ib_insync); in April 2026 we switched to the actively maintained fork [ib_async](https://github.com/ib-api-reloaded/ib_async).
 
 Although this document is about Interactive Brokers, you should read it carefully if you plan to use other brokers as it explains how to modify the various classes to achieve that, or perhaps if you want to use an alternative Python layer to talk to the IB API
 
@@ -293,7 +293,6 @@ You can use this directly if you are familiar with ib_async eg `conn.ib.position
 ### Make multiple connections
 
 It's possible to have multiple connections to the IB Gateway, each from its own process, but each connection must have a unique clientid. Used clientids are stored in the active database (usually MongoDB) to ensure we don't re-use active clientids. 
-
 
 
 

@@ -112,7 +112,7 @@ And now install the project and its dependencies
 (.venv) $ python -m pip install .
 ```
 
-Or, if you intend to contribute to the project, you will need the optional development dependencies too, and will want to install in *editable* mode
+Or, if you intend to contribute to the project, you will need the optional œdevelopment dependencies too, and will want to install in *editable* mode
 
 ```
 (.venv) $ python -m pip install --editable '.[dev]'
