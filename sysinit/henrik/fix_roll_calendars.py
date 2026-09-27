@@ -32,8 +32,16 @@ from pathlib import Path
 import pandas as pd
 
 from sysobjects.roll_calendars import rollCalendar
+from sysobjects.dict_of_futures_per_contract_prices import (
+    dictFuturesContractFinalPrices,
+)
 from sysdata.csv.csv_roll_calendars import csvRollCalendarData
 from sysdata.csv.csv_roll_parameters import csvRollParametersData
+from sysinit.futures.build_roll_calendars import (
+    adjust_to_price_series,
+    align_prices_by_date,
+    generate_approximate_calendar,
+)
 from sysproduction.data.prices import diagPrices
 
 # Output paths - adjust this to your PST installation
@@ -42,10 +50,113 @@ ROLL_CALENDAR_PATH = "data/futures/roll_calendars_csv"
 # Minimum gap (in days) to consider a roll calendar "truncated"
 MIN_GAP_DAYS = 365
 
+# E.g. 'Z' (December) for CRUDE_W. Used to pick the contracts actually held in the roll cycle.
+MONTH_LETTERS = "FGHJKMNQUVXZ"
+
 
 def get_diag_prices():
     """Lazy load diagPrices to avoid initialization on import."""
     return diagPrices()
+
+
+def _held_contract_months(roll_parameters) -> list:
+    """Hold cycle 对应的月份，例如 hold cycle 'Z' -> ['12']。"""
+    cycle = str(roll_parameters.hold_rollcycle.cyclestring)
+    return [f"{MONTH_LETTERS.index(letter) + 1:02d}" for letter in cycle]
+
+
+def find_continuous_chain_start(
+    dict_of_final_prices, roll_parameters
+) -> str:
+    """
+    找出最早一个「能支撑完整日历」的 held 合约：从它开始，相邻 held 合约都必须至少有一个
+    共同交易日。
+
+    早期稀疏数据（例：CRUDE_W 的 19861200/19871200、19871200/19881200 完全没有重叠行情）
+    会让换月日无处落位，create_from_prices 直接在中途截断，全量重建因此报废。
+    从连续链的起点开始重建才能得到从起点到数据末端的完整日历。
+    """
+    months = _held_contract_months(roll_parameters)
+    held_contracts = sorted(
+        str(contract)
+        for contract in dict_of_final_prices.keys()
+        if str(contract)[4:6] in months
+    )
+    if not held_contracts:
+        raise Exception("No held contract with price data")
+
+    price_dates = {
+        contract: pd.DatetimeIndex(
+            pd.Series(dict_of_final_prices[contract]).index
+        ).normalize()
+        for contract in held_contracts
+    }
+
+    start_index = len(held_contracts) - 1
+    for index in range(len(held_contracts) - 2, -1, -1):
+        current_contract = held_contracts[index]
+        next_contract = held_contracts[index + 1]
+        if len(price_dates[current_contract].intersection(price_dates[next_contract])) == 0:
+            break
+        start_index = index
+
+    return held_contracts[start_index]
+
+
+def build_chain_aware_roll_calendar(
+    dict_of_final_prices, roll_parameters
+) -> (rollCalendar, dict):
+    """
+    按 docs/roll_calendar_rules_cn.md §6 重建单品种日历：
+
+    1. 只从「连续链」的起点开始（跳过早期没有重叠行情的合约）；
+    2. 名义换月日超出数据末端的行不写入（会被 adjust_to_price_series 挤回数据末端，
+       造成「提前换月」，前端合约跳到更远的月份）。
+    """
+    start_contract = find_continuous_chain_start(dict_of_final_prices, roll_parameters)
+    prices_from_start = dictFuturesContractFinalPrices(
+        {
+            contract: series
+            for contract, series in dict_of_final_prices.items()
+            if str(contract) >= start_contract
+        }
+    )
+    data_end = max(
+        pd.Series(series).index.max() for series in prices_from_start.values()
+    )
+
+    approx_calendar = generate_approximate_calendar(roll_parameters, prices_from_start)
+    # 价格库里 Norgate(00:00) 与 IB(23:00) 两种时间戳并存，换月对齐前先按日期对齐
+    adjusted_calendar = adjust_to_price_series(
+        approx_calendar, align_prices_by_date(prices_from_start)
+    )
+
+    nominal_roll_dates = {
+        (str(row.current_contract), str(row.next_contract)): row.name
+        for _, row in approx_calendar.iterrows()
+    }
+    keep_row = [
+        nominal_roll_dates.get(
+            (str(row.current_contract), str(row.next_contract)), row.name
+        )
+        <= data_end
+        for _, row in adjusted_calendar.iterrows()
+    ]
+    final_calendar = adjusted_calendar[keep_row]
+
+    if len(final_calendar) == 0:
+        raise Exception("Chain aware rebuild produced an empty calendar")
+
+    info = {
+        "chain_start": start_contract,
+        "data_end": data_end,
+        "approx_rows": len(approx_calendar),
+        "rows": len(final_calendar),
+        "last_row": final_calendar.index[-1],
+        "front_contract": str(final_calendar.iloc[-1].next_contract),
+    }
+
+    return rollCalendar(final_calendar), info
 
 
 def detect_truncated_roll_calendars(
@@ -79,7 +190,13 @@ def detect_truncated_roll_calendars(
 
             contracts = sorted(dict_of_prices.keys())
             earliest_contract = contracts[0]  # e.g., "19990600"
-            earliest_dt = pd.to_datetime(str(earliest_contract)[:6] + "01", format="%Y%m%d")
+            # 早期没有重叠行情的合约进不了日历（链式不变量），所以起点要按「连续链起点」比，
+            # 否则这类品种会被反复判成「日历被截断」并反复重建。
+            roll_parameters = csvRollParametersData().get_roll_parameters(instrument)
+            chain_start = find_continuous_chain_start(
+                dict_of_prices.final_prices(), roll_parameters
+            )
+            earliest_dt = pd.to_datetime(str(chain_start)[:6] + "01", format="%Y%m%d")
 
             # Get roll calendar start
             try:
@@ -98,6 +215,7 @@ def detect_truncated_roll_calendars(
                 truncated.append({
                     "instrument": instrument,
                     "contracts_from": str(earliest_contract)[:6],
+                    "usable_from": str(chain_start)[:6],
                     "roll_cal_from": roll_start.strftime("%Y-%m"),
                     "gap_years": round(gap_days / 365, 1),
                 })
@@ -241,8 +359,8 @@ def regenerate_roll_calendar(
     # Build roll calendar from prices
     try:
         if not quiet:
-            print("  Building roll calendar from prices...")
-        roll_calendar = rollCalendar.create_from_prices(
+            print("  Building roll calendar from prices (chain aware)...")
+        roll_calendar, rebuild_info = build_chain_aware_roll_calendar(
             dict_of_final_prices, roll_parameters
         )
 
@@ -251,9 +369,17 @@ def regenerate_roll_calendar(
         roll_calendar.check_dates_are_valid_for_prices(dict_of_final_prices)
 
         if not quiet:
+            print(
+                "  Chain start: %s (skipped earlier contracts with no overlapping prices)"
+                % rebuild_info["chain_start"]
+            )
+            print("  Data end: %s" % str(rebuild_info["data_end"]))
             print(f"  Generated {len(roll_calendar)} roll entries")
             print(f"  First roll: {roll_calendar.index[0]}")
             print(f"  Last roll: {roll_calendar.index[-1]}")
+            print(
+                "  Front contract after last roll: %s" % rebuild_info["front_contract"]
+            )
 
     except Exception as e:
         print(f"  ERROR building roll calendar: {e}")

@@ -8,6 +8,7 @@
    与 ib_config_futures.csv 中 priceMagnifier=1、instrumentconfig 中 SILVER 1000、
    COPPER 25000 的现有配置自洽。
 3. 只导入 instrumentconfig.csv 中存在的品种，其余（AUS10、AUS3、AUS_BILL90）自动跳过
+4. 时间戳保持 Norgate 导出的原样（DATETIME 只有日期，解析为当日 00:00），不做 23:00 规范化
 
 用法：
     python sysinit/henrik/import_norgate_csv.py --dry-run          # 只列出将要导入的品种
@@ -23,15 +24,12 @@ import sys
 
 import pandas as pd
 
-from syscore.dateutils import MIXED_FREQ, replace_midnight_with_notional_closing_time
+from syscore.dateutils import MIXED_FREQ
 from syscore.fileutils import resolve_path_and_filename_for_package
-from sysdata.csv.csv_futures_contract_prices import (
-    ConfigCsvFuturesPrices,
-    csvFuturesContractPriceData,
+from sysdata.csv.csv_futures_contract_prices import ConfigCsvFuturesPrices
+from sysinit.futures.contract_prices_from_csv_to_db import (
+    init_db_with_csv_futures_contract_prices_for_code,
 )
-from sysobjects.contracts import futuresContract
-from sysobjects.futures_per_contract_prices import futuresContractPrices
-from sysproduction.data.prices import diagPrices
 
 NORGATE_DIR = "/Volumes/data/systrade/norgate_export"
 PREPARED_DIR = "/Volumes/data/systrade/norgate_export_usd"
@@ -48,57 +46,6 @@ NORGATE_CSV_CONFIG = ConfigCsvFuturesPrices(
         OPEN="OPEN", HIGH="HIGH", LOW="LOW", FINAL="FINAL", VOLUME="VOLUME"
     ),
 )
-
-diag_prices = diagPrices()
-
-
-def apply_pst_daily_convention(
-    prices_for_contract: futuresContractPrices,
-) -> futuresContractPrices:
-    """
-    把日线时间戳从 00:00 规范到 PST 的日线约定（notional closing time，即当日 23:00）。
-
-    Norgate 导出的 DATETIME 只有日期，直接解析会得到 00:00；而 PST 自带 CSV 与 IB 取数
-    路径（ib_price_client._ib_timestamp_to_datetime）用的都是 23:00。两者混在一个品种里
-    会导致换月匹配（需要同日同时间戳）永远失败，进而让 roll calendar 被静默截断、
-    前端合约停在过期合约上（FIR-131）。
-    """
-    prices_as_df = pd.DataFrame(prices_for_contract).copy()
-    original_index = prices_as_df.index
-    prices_as_df.index = [
-        replace_midnight_with_notional_closing_time(timestamp)
-        for timestamp in original_index
-    ]
-    duplicates = int(prices_as_df.index.duplicated(keep="last").sum())
-    if duplicates:
-        prices_as_df = prices_as_df[~prices_as_df.index.duplicated(keep="last")]
-
-    return futuresContractPrices(prices_as_df)
-
-
-def import_instrument(code: str, datapath: str, frequency=MIXED_FREQ) -> int:
-    """
-    与上游 init_db_with_csv_futures_contract_prices_for_code 相同，只是在写库前把
-    日线时间戳规范到 PST 约定的 23:00。
-    """
-    csv_prices = csvFuturesContractPriceData(datapath, config=NORGATE_CSV_CONFIG)
-    db_prices = diag_prices.db_futures_contract_price_data
-
-    csv_price_dict = csv_prices.get_prices_at_frequency_for_instrument(
-        code, frequency
-    )
-
-    for contract_date_str, prices_for_contract in csv_price_dict.items():
-        prices_for_contract = apply_pst_daily_convention(prices_for_contract)
-        contract = futuresContract(code, contract_date_str)
-        db_prices.write_prices_at_frequency_for_contract_object(
-            contract,
-            prices_for_contract,
-            ignore_duplication=True,
-            frequency=frequency,
-        )
-
-    return len(csv_price_dict)
 
 
 def instruments_in_export() -> list:
@@ -175,8 +122,12 @@ def main(argv=None):
         datapath = PREPARED_DIR if code in CENTS_TO_DOLLARS else NORGATE_DIR
         print(f"[{index}/{len(to_import)}] {code}  (来源 {datapath})", flush=True)
         try:
-            contracts = import_instrument(code, datapath=datapath)
-            print(f"  已导入 {contracts} 个合约（时间戳已规范为 23:00）", flush=True)
+            init_db_with_csv_futures_contract_prices_for_code(
+                code,
+                datapath=datapath,
+                csv_config=NORGATE_CSV_CONFIG,
+                frequency=MIXED_FREQ,
+            )
         except Exception as error:
             failures.append((code, f"{type(error).__name__}: {str(error)[:80]}"))
             print(f"  失败: {failures[-1][1]}", flush=True)

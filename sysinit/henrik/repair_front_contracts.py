@@ -102,11 +102,14 @@ def trim_spurious_trailing_rows(roll_calendar: pd.DataFrame, front_contract: int
 
 
 def build_multiple_prices(
-    instrument_code: str, roll_calendar, dict_of_closing_prices
+    instrument_code: str, roll_calendar, dict_of_closing_prices, adjust_calendar: bool = True
 ) -> futuresMultiplePrices:
     roll_parameters = csvRollParametersData().get_roll_parameters(instrument_code)
     roll_calendar = add_phantom_row(roll_calendar, dict_of_closing_prices, roll_parameters)
-    roll_calendar = adjust_to_price_series(roll_calendar, dict_of_closing_prices)
+    if adjust_calendar:
+        # 注意：adjust 需要换月两端合约有同一时间戳，遇到“到期即换月、两合约不重叠”
+        # 的品种会把整段日历截断，这类品种用 --no-adjust 直接按日历构建
+        roll_calendar = adjust_to_price_series(roll_calendar, dict_of_closing_prices)
     roll_calendar = add_phantom_row(roll_calendar, dict_of_closing_prices, roll_parameters)
 
     return futuresMultiplePrices.create_from_raw_data(
@@ -120,6 +123,7 @@ def repair_instrument(
     recent_only_cutoff=None,
     allow_missing_front=False,
     trim_calendar=True,
+    adjust_calendar=True,
 ):
     roll_calendar_data = csvRollCalendarData(ROLL_CALENDAR_PATH)
     roll_calendar = roll_calendar_data.get_roll_calendar(instrument_code)
@@ -147,7 +151,9 @@ def repair_instrument(
     rows_dropped = len(roll_calendar) - len(trimmed)
 
     dict_of_closing_prices = daily_aligned_final_prices(instrument_code)
-    multiple_prices = build_multiple_prices(instrument_code, trimmed, dict_of_closing_prices)
+    multiple_prices = build_multiple_prices(
+        instrument_code, trimmed, dict_of_closing_prices, adjust_calendar=adjust_calendar
+    )
 
     if recent_only_cutoff is not None:
         stored = pd.DataFrame(
@@ -171,7 +177,8 @@ def repair_instrument(
     if dry_run:
         return multiple_prices
 
-    if rows_dropped:
+    # 用 --recent-only 时，日历被切成了近期片段，不能整份写回去（会把历史砍掉）
+    if rows_dropped and recent_only_cutoff is None:
         roll_calendar_data.add_roll_calendar(instrument_code, trimmed, ignore_duplication=True)
 
     db_multiple_prices = diag_prices.db_futures_multiple_prices_data
@@ -214,6 +221,11 @@ def main(argv=None) -> int:
         action="store_true",
         help="不订正日历末端，只用按日期对齐的价格重建",
     )
+    parser.add_argument(
+        "--no-adjust",
+        action="store_true",
+        help="不做换月日历对齐（用于换月两端合约不重叠、adjust 会误截断的品种）",
+    )
     args = parser.parse_args(argv)
 
     if args.instruments:
@@ -232,6 +244,7 @@ def main(argv=None) -> int:
                 recent_only_cutoff=cutoff if instrument_code in recent_only else None,
                 allow_missing_front=args.allow_missing_front,
                 trim_calendar=not args.no_trim,
+                adjust_calendar=not args.no_adjust,
             )
             succeeded.append(instrument_code)
         except Exception as error:
