@@ -2,6 +2,11 @@ import yaml
 from sysobjects.production.trading_hours.dict_of_weekly_trading_hours_any_day import (
     dictOfDictOfWeekdayTradingHours,
 )
+from sysdata.production.trading_hours_timezone import (
+    convert_hours_to_local_time,
+    hours_spec_from_timezone_aware_entry,
+    is_timezone_aware_entry,
+)
 from syscore.fileutils import resolve_path_and_filename_for_package
 
 
@@ -14,7 +19,26 @@ def read_trading_hours(filename: str):
         print("File %s not found, no saved trading hours" % filename)
         simple_dict = {}
 
+    simple_dict = {
+        entry_name: _convert_entry_to_local_time_if_needed(entry)
+        for entry_name, entry in simple_dict.items()
+    }
+
     return dictOfDictOfWeekdayTradingHours.from_simple_dict(simple_dict)
+
+
+def _convert_entry_to_local_time_if_needed(entry):
+    """
+    支持「交易所时区 + 交易所当地时段」的写法，读取时自动换算成本机时间；
+    不带 timezone 的旧写法（本机时间）原样返回。
+    """
+    if not is_timezone_aware_entry(entry):
+        return entry
+
+    return convert_hours_to_local_time(
+        hours_spec=hours_spec_from_timezone_aware_entry(entry),
+        timezone_name=entry["timezone"],
+    )
 
 
 def write_trading_hours(

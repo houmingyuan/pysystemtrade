@@ -51,25 +51,73 @@ def get_trading_hours_from_contract_details(
 
 NO_ADJUSTMENTS = 0, 0
 CLOSED_ALL_DAY = object()
+ONE_HOUR = datetime.timedelta(hours=1)
 
 
 def parse_trading_hours_string(
     trading_hours_string: str,
     adjustment_hours: int = 0,
 ) -> listOfTradingHours:
-    day_by_day = trading_hours_string.split(";")
-    list_of_open_times = [
-        parse_trading_for_day(string_for_day, adjustment_hours=adjustment_hours)
-        for string_for_day in day_by_day
-    ]
+    """
+    把 IB 的 tradingHours 字符串解析成交易时段列表，并做「按天」的安全裁剪。
 
-    list_of_open_times = [
-        open_time for open_time in list_of_open_times if open_time is not CLOSED_ALL_DAY
-    ]
+    裁剪规则（先按交易所交易日分组，再在组内裁）：
 
-    list_of_open_times = listOfTradingHours(list_of_open_times)
+    * 当天的**第一段**：开盘时间 +1 小时，收盘时间不变；
+    * 当天的**最后一段**：收盘时间 -1 小时，开盘时间不变；
+    * 中间的段：不做任何调整。
 
-    return list_of_open_times
+    单段的日子等价于旧行为（开盘 +1、收盘 -1）。之所以按天裁而不是逐段裁：
+    香港这类市场一天有多段（早盘 / 午盘 / 夜盘），逐段裁会把每段两端都削掉，
+    短段会被削成零长度而消失；按天裁只保留「避开开盘 1 小时与收盘 1 小时」的
+    整体保护意图（用于吸收时区 / DST 换算的不精确）。
+    """
+    sessions_by_exchange_trading_date = {}
+    for string_for_day in trading_hours_string.split(";"):
+        parsed_session = parse_trading_for_day(
+            string_for_day, adjustment_hours=adjustment_hours
+        )
+        if parsed_session is CLOSED_ALL_DAY:
+            continue
+        exchange_trading_date = _exchange_trading_date_from_entry(string_for_day)
+        sessions_by_exchange_trading_date.setdefault(exchange_trading_date, []).append(
+            parsed_session
+        )
+
+    list_of_open_times = []
+    for _, sessions_today in sessions_by_exchange_trading_date.items():
+        sessions_today.sort(key=lambda session: session.opening_time)
+        if len(sessions_today) == 1:
+            # 一天只有一段：开盘 +1、收盘 -1（首尾是同一段）
+            only_session = sessions_today[0]
+            sessions_today[0] = tradingHours(
+                only_session.opening_time + ONE_HOUR,
+                only_session.closing_time - ONE_HOUR,
+            )
+        else:
+            first_session = sessions_today[0]
+            last_session = sessions_today[-1]
+            sessions_today[0] = tradingHours(
+                first_session.opening_time + ONE_HOUR, first_session.closing_time
+            )
+            sessions_today[-1] = tradingHours(
+                last_session.opening_time, last_session.closing_time - ONE_HOUR
+            )
+        list_of_open_times.extend(sessions_today)
+
+    list_of_open_times = sorted(list_of_open_times, key=lambda session: session.opening_time)
+
+    return listOfTradingHours(list_of_open_times)
+
+
+def _exchange_trading_date_from_entry(string_for_day: str) -> str:
+    """
+    取 IB 条目的「交易所当地交易日」前缀（如 '20260928:0915-20260928:1200' → '20260928'）。
+
+    注意：分组必须用交易所当地日期（未经时区换算），因为「一天分几段」是交易所定义的；
+    换算到本机时区后日期可能整体平移，会把同一天的段拆散。
+    """
+    return string_for_day.split(":")[0]
 
 
 def parse_trading_for_day(
@@ -83,18 +131,11 @@ def parse_trading_for_day(
     start_phrase = start_and_end[0]
     end_phrase = start_and_end[1]
 
-    # Doesn't deal with DST. We will be conservative and only trade 1 hour
-    # after and 1 hour before
-    adjust_start = 1
-    adjust_end = -1
+    # 这里只做时区换算；「开盘 +1 小时 / 收盘 -1 小时」的安全裁剪在
+    # parse_trading_hours_string 里按天进行（见该函数说明）
+    start_dt = parse_phrase(start_phrase, adjustment_hours=adjustment_hours)
 
-    start_dt = parse_phrase(
-        start_phrase, adjustment_hours=adjustment_hours, additional_adjust=adjust_start
-    )
-
-    end_dt = parse_phrase(
-        end_phrase, adjustment_hours=adjustment_hours, additional_adjust=adjust_end
-    )
+    end_dt = parse_phrase(end_phrase, adjustment_hours=adjustment_hours)
 
     return tradingHours(start_dt, end_dt)
 
