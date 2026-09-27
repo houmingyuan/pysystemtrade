@@ -1,4 +1,4 @@
-from syscore.exceptions import missingContract
+from syscore.exceptions import ContractNotFound, missingContract
 from syscore.constants import success
 
 from sysobjects.contract_dates_and_expiries import contractDate, expiryDate
@@ -341,7 +341,7 @@ def update_expiry_and_sampling_status_for_contract(
 
     try:
         broker_expiry_date = get_contract_expiry_from_broker(contract_object, data=data)
-    except missingContract:
+    except (missingContract, ContractNotFound):
         data.log.debug(
             "Can't find expiry for %s, could be a connection problem but could be because contract has already expired"
             % (str(contract_object)),
@@ -444,7 +444,15 @@ def has_contract_expired(
 ) -> bool:
     data_contracts = dataContracts(data)
     contract = futuresContract(instrument_code, contract_id)
-    actual_contract = data_contracts.get_contract_from_db(contract)
+    try:
+        actual_contract = data_contracts.get_contract_from_db(contract)
+    except (missingContract, ContractNotFound):
+        # 采样表里可能残留合约库里已经删掉的合约（例如 SILVER/20260600），
+        # 这种情况下按「已过期」处理，避免整个采样步骤崩掉。
+        data.log.warning(
+            "Contract %s not found in contract DB; treat as expired" % str(contract)
+        )
+        return True
 
     return actual_contract.expired()
 

@@ -5,6 +5,8 @@ Update historical data per contract from interactive brokers data, dump into mon
 import time
 import datetime
 
+import pandas as pd
+
 from copy import copy
 from typing import List, Tuple
 
@@ -493,10 +495,43 @@ def write_merged_prices_for_contract(
     merged_prices = merge_data_with_different_freq(list_of_data)
 
     if len(merged_prices) > 0:
+        merged_prices = _keep_history_only_in_merged_file(
+            diag_prices, contract_object, merged_prices
+        )
         price_updater.overwrite_merged_prices_for_contract(
             contract_object=contract_object,
             new_prices=futuresContractPrices(merged_prices),
         )
+
+
+def _keep_history_only_in_merged_file(diag_prices, contract_object, merged_prices):
+    """
+    保留只存在于「合并文件」里的历史（FIR-137）。
+
+    分频文件（Day@ / Hour@）可能只覆盖最近一段（例如历史是 CSV/Norgate 直接写进合并文件的，
+    没有分频文件）。此时如果直接用分频文件的结果覆盖合并文件，历史会被静默丢掉
+    （VIX/20260900 曾从 184 行被覆盖成 2 行）。
+
+    做法：把库内已有的合并数据并进来，同一天以新数据为准。
+    """
+    try:
+        existing_merged = diag_prices.get_merged_prices_for_contract_object(
+            contract_object
+        )
+    except Exception:
+        return merged_prices
+
+    if existing_merged is None or len(existing_merged) == 0:
+        return merged_prices
+
+    existing_frame = pd.DataFrame(existing_merged)
+    new_frame = pd.DataFrame(merged_prices)
+    combined = pd.concat([new_frame, existing_frame]).sort_index()
+    # 同一天只保留一条（新数据在前 → 优先新数据）
+    combined = combined[
+        ~pd.DatetimeIndex(combined.index).normalize().duplicated(keep="first")
+    ]
+    return combined
 
 
 if __name__ == "__main__":
