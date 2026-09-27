@@ -1,6 +1,9 @@
 """
 把 Norgate 导出的历史（≤2026-09-18）并回「合并文件」，修 FIR-137 造成的历史覆盖。
 
+⚠️ 一次性脚本：**已于 2026-09-27 执行完毕**，不要重复运行
+   （再跑一次会重复并入同一批 Norgate 历史，没有意义）。
+
 背景：
     上游的 IB 增量写入会重建合并文件（`write_merged_prices_for_contract` 用分频文件覆盖），
     对「历史只存在于合并文件」（没有 Day@ / Hour@）的合约，Norgate 导入的历史会被整段丢掉。
@@ -25,6 +28,8 @@ import os
 import sys
 
 import pandas as pd
+
+from sysdata.parquet.parquet_access import write_parquet_atomically
 
 NORGATE_DIR = "/Volumes/data/systrade/norgate_export"
 STORE_DIR = "/Volumes/data/systrade/parquet/futures_contract_prices"
@@ -64,7 +69,7 @@ def restore_contract(csv_path: str, commit: bool) -> dict:
         return result
 
     if commit:
-        merged.to_parquet(parquet_path)
+        write_parquet_atomically(merged, parquet_path)
         result["status"] = "已恢复 +%d 行" % (len(merged) - len(stored))
     else:
         result["status"] = "[dry-run] 将恢复 +%d 行" % (len(merged) - len(stored))

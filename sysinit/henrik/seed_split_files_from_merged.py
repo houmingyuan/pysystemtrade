@@ -1,6 +1,9 @@
 """
 把「合并文件」里的历史价格拆成 Day@ / Hour@ 分频文件（FIR-127 第 A 步）。
 
+⚠️ 一次性脚本：**已于 2026-09-27 执行完毕**，不要重复运行
+   （脚本本身是 ignore_duplication=False，重复跑只会告警不覆盖，但没必要）。
+
 为什么需要：
     Norgate 导入只写合并文件（INSTRUMENT#YYYYMM00.parquet），没有 Day@ / Hour@。
     IB 每日增量在写库前会读「按频率」的旧数据来判断尖峰；读不到旧数据时 PST 会把

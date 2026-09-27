@@ -1,6 +1,9 @@
 """
 回滚 FIR-131 的「时间戳口径统一」：把 Norgate 日线的 23:00 改回导出时的 00:00（FIR-144）。
 
+⚠️ 一次性脚本：**已于 2026-09-27 执行完毕**，不要重复运行
+   （再跑一次会拿旧备份去比对已经改好的数据，属于无意义操作）。
+
 背景：2026-09-25 的 FIR-131 主线把全库合约价格文件的日线时间戳从 Norgate 导出的
 00:00 统一改写成 PST 约定的 23:00（当次记录：23,223 个文件、9,820,442 行）。
 本脚本用那次改动前的备份做逐文件比对，只把「备份里是 00:00、库内是 23:00」的行改回
@@ -20,6 +23,8 @@ import os
 import sys
 
 import pandas as pd
+
+from sysdata.parquet.parquet_access import write_parquet_atomically
 
 CURRENT_DIR = "/Volumes/data/systrade/parquet/futures_contract_prices"
 BACKUP_DIR = (
@@ -74,7 +79,7 @@ def revert_file(filename: str, dry_run: bool = False) -> dict:
     result["dropped_duplicates"] = duplicates
 
     if not dry_run:
-        reverted.to_parquet(current_path)
+        write_parquet_atomically(reverted, current_path)
 
     return result
 

@@ -4,12 +4,15 @@ FIR-127 只读归因：把每日更新中「价格尖峰被拒」的合约，重
 不写入任何数据；输出明细到 /tmp/fir127_spike_audit.csv，并在终端打印分类汇总。
 
 用法：
-    python sysinit/henrik/audit_ib_price_spikes.py                 # 解析默认日志里的被拒合约
+    python sysinit/henrik/audit_ib_price_spikes.py                 # 解析最近一份更新日志里的被拒合约
+    python sysinit/henrik/audit_ib_price_spikes.py --log /Volumes/data/systrade/log/update_20260924.log
     python sysinit/henrik/audit_ib_price_spikes.py --limit 20       # 先试前 20 个
     python sysinit/henrik/audit_ib_price_spikes.py --frequency both # 日线 + 小时线
 """
 
 import argparse
+import glob
+import os
 import re
 import sys
 from collections import Counter
@@ -31,13 +34,25 @@ from sysobjects.contracts import futuresContract
 from sysproduction.data.broker import dataBroker
 from sysproduction.data.prices import diagPrices
 
-DEFAULT_LOG = "/Volumes/data/systrade/log/update_20260924.log"
+DEFAULT_LOG_DIR = "/Volumes/data/systrade/log"
+LOG_FILE_PATTERN = "update_*.log"
 OUTPUT_CSV = "/tmp/fir127_spike_audit.csv"
 MAX_PRICE_SPIKE = 8.0
 
 LOG_PATTERN = re.compile(
     r"instrument_code': '([^']+)', 'contract_date': '([^']+)'.*moved too much"
 )
+
+
+def latest_update_log(log_dir: str = DEFAULT_LOG_DIR) -> str:
+    """不指定 --log 时用最近一份 update_*.log，不再硬编码某一天。"""
+    candidates = sorted(glob.glob(os.path.join(log_dir, LOG_FILE_PATTERN)))
+    if not candidates:
+        raise SystemExit(
+            "在 %s 下找不到 %s，请用 --log 指定要审计的日志" % (log_dir, LOG_FILE_PATTERN)
+        )
+
+    return candidates[-1]
 
 
 def rejected_contracts_from_log(path: str) -> list:
@@ -176,7 +191,9 @@ def audit_one(data, instrument_code: str, contract_date_str: str, frequency) -> 
 
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description="FIR-127 尖峰拒绝只读归因")
-    parser.add_argument("--log", default=DEFAULT_LOG)
+    parser.add_argument(
+        "--log", default=None, help="要审计的更新日志，默认取最近一份 update_*.log"
+    )
     parser.add_argument("--limit", type=int, default=None)
     parser.add_argument(
         "--frequency",
@@ -186,10 +203,11 @@ def main(argv=None) -> int:
     )
     args = parser.parse_args(argv)
 
-    pairs = rejected_contracts_from_log(args.log)
+    log_path = args.log or latest_update_log()
+    pairs = rejected_contracts_from_log(log_path)
     if args.limit:
         pairs = pairs[: args.limit]
-    print(f"被拒合约（去重）{len(pairs)} 个，来源 {args.log}", flush=True)
+    print(f"被拒合约（去重）{len(pairs)} 个，来源 {log_path}", flush=True)
 
     with dataBlob(log_name="Price-Spike-Audit") as data:
         frequencies = [DAILY_PRICE_FREQ]

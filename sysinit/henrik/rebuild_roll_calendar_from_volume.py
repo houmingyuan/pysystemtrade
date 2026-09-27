@@ -2,8 +2,11 @@
 按成交量重建换月日历（FIR-134）。
 
 规则：逐日取成交量最大的合约作为“持有合约”，当持有合约向前切换时记为一次换月，
-行写成 (换月日, current=换月前持有, next=换月后持有, carry=换月前持有)，
+行写成 (换月日, current=换月前持有, next=换月后持有, carry=按 rollconfig 推导)，
 与 PST 的 roll calendar 语义一致（row 的 next_contract 是换月后持有的合约）。
+
+carry 合约**按 rollconfig 的 CarryOffset 推导**（-1 = 上月、+1 = 下月），不再写死成
+「换月前持有」——那样会把 VIX 这类 CarryOffset=+1 的口径改回去。
 
 对单日成交量毛刺用 rolling(3).median() 平滑；只接受向前（月份变大）的切换。
 
@@ -19,7 +22,10 @@ import sys
 import pandas as pd
 
 from sysdata.csv.csv_roll_calendars import csvRollCalendarData
+from sysdata.csv.csv_roll_parameters import csvRollParametersData
 import sysinit.futures.rebuild_roll_calendar_from_prices as R
+from sysobjects.contract_dates_and_expiries import contractDate
+from sysobjects.rolls import contractDateWithRollParameters
 
 CP_PATH = "/Users/henrik/data/parquet/futures_contract_prices"
 ROLL_CALENDAR_PATH = "data/futures/roll_calendars_csv"
@@ -45,6 +51,7 @@ def daily_volume_by_contract(instrument_code: str, min_date: str) -> pd.DataFram
 
 
 def calendar_rows_from_volume(instrument_code: str, min_date: str) -> pd.DataFrame:
+    roll_parameters = csvRollParametersData().get_roll_parameters(instrument_code)
     volumes = daily_volume_by_contract(instrument_code, min_date)
     volumes = volumes.rolling(SMOOTH_DAYS, min_periods=1).median()
     # 成交量最大的合约里，若存在成交额接近（>= 50%）的更近月合约，取更近的那个，
@@ -70,7 +77,9 @@ def calendar_rows_from_volume(instrument_code: str, min_date: str) -> pd.DataFra
             continue
         if candidate <= held:
             continue
-        rows.append((date, held, candidate, held))
+        rows.append(
+            (date, held, candidate, carry_contract_for_held(held, roll_parameters))
+        )
         held = candidate
 
     calendar = pd.DataFrame(
@@ -81,6 +90,26 @@ def calendar_rows_from_volume(instrument_code: str, min_date: str) -> pd.DataFra
     calendar.index.name = R.INDEX_NAME
 
     return calendar
+
+
+def carry_contract_for_held(held_contract: int, roll_parameters) -> int:
+    """
+    carry 合约由 rollconfig 的 CarryOffset 决定（复用 contractDateWithRollParameters）。
+
+    推不出来时（rollconfig 到不了、合约不在 rollcycle 里）退回「换月前持有」并告警，
+    不让整个重建失败。
+    """
+    try:
+        held = contractDateWithRollParameters(
+            contractDate(str(held_contract)), roll_parameters
+        )
+        return int(held.carry_contract().date_str)
+    except Exception as error:
+        print(
+            "  WARN: 合约 %s 无法按 rollconfig 推导 carry（%s: %s），退回换月前持有"
+            % (held_contract, type(error).__name__, error)
+        )
+        return int(held_contract)
 
 
 def check_chain(calendar: pd.DataFrame) -> list:

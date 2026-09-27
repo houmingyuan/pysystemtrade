@@ -6,7 +6,7 @@
     python sysinit/henrik/repair_front_contracts.py --instruments CORN SP500
     python sysinit/henrik/repair_front_contracts.py --recent-only HANG --recent-from 2025-10-01
 做两件事：
-1. 用按日期对齐（normalize 到当日 23:00 并去重）的合约价格构建 multiple prices，
+1. 用按日期对齐（normalize 到当日 00:00 并去重，复用主线 align_prices_by_date）的合约价格构建 multiple prices，
    消除 Day 合约（23:00）与 Hour 合约（21:30/01:00/02:00）时间戳不一致导致的静默截断；
 2. 用近期成交量判断真正的前端合约，砍掉日历末端指向非前端合约的“提前换月”行。
 """
@@ -18,46 +18,56 @@ import pandas as pd
 from syscore.constants import arg_not_supplied
 from sysdata.csv.csv_roll_calendars import csvRollCalendarData
 from sysdata.csv.csv_roll_parameters import csvRollParametersData
-from sysinit.futures.adjustedprices_from_db_multiple_to_db import (
-    process_adjusted_prices_single_instrument,
-)
 from sysinit.futures.build_roll_calendars import adjust_to_price_series
-from sysinit.futures.multipleprices_from_db_prices_and_csv_calendars_to_db import (
-    add_phantom_row,
-)
+from sysinit.futures.build_roll_calendars import align_prices_by_date
 from sysobjects.dict_of_futures_per_contract_prices import (
     dictFuturesContractFinalPrices,
 )
 from sysobjects.multiple_prices import futuresMultiplePrices
 from sysproduction.data.prices import diagPrices
 
+## 注意：sysinit.futures.adjustedprices_from_db_multiple_to_db 与
+## multipleprices_from_db_prices_and_csv_calendars_to_db 在 import 时会连库（各约 30s），
+## 所以这两个依赖在真正用到的函数里再 import。
+
 ROLL_CALENDAR_PATH = "data/futures/roll_calendars_csv"
-DAILY_STAMP_HOUR = 23
 VOLUME_LOOKBACK_DAYS = 5
 
-diag_prices = diagPrices()
+_diag_prices = None
+
+
+def get_diag_prices():
+    """
+    延迟构造 diagPrices。
+
+    模块级直接构造会连库（约 30s），既拖慢 import，也让这个工具没法被单测直接引用。
+    """
+    global _diag_prices
+    if _diag_prices is None:
+        _diag_prices = diagPrices()
+
+    return _diag_prices
 
 
 def daily_aligned_final_prices(instrument_code: str) -> dictFuturesContractFinalPrices:
-    """取全部合约收盘价并把时间戳统一到当日 23:00（同日多条保留最后一条）。"""
-    raw = diag_prices.db_futures_contract_price_data.get_merged_prices_for_instrument(
+    """
+    取全部合约收盘价并按日期对齐（当日 00:00，同日多条保留最新一条）。
+
+    直接复用主线 `build_roll_calendars.align_prices_by_date()`，
+    避免本地工具写出与主线不同口径（曾经是 23:00）的 multiple prices。
+    """
+    raw = get_diag_prices().db_futures_contract_price_data.get_merged_prices_for_instrument(
         instrument_code
     )
-    aligned = {}
-    for contract_key, series in raw.final_prices().items():
-        series = pd.Series(series).copy()
-        index = pd.DatetimeIndex(series.index)
-        series.index = index.normalize() + pd.Timedelta(hours=DAILY_STAMP_HOUR)
-        series = series[~series.index.duplicated(keep="last")].sort_index()
-        aligned[contract_key] = series
-
-    return dictFuturesContractFinalPrices(aligned)
+    return align_prices_by_date(dictFuturesContractFinalPrices(raw.final_prices()))
 
 
 def current_front_contract_by_volume(instrument_code: str):
     """最近若干交易日成交量最大的合约即真正的前端合约。"""
-    contracts = diag_prices.db_futures_contract_price_data.get_merged_prices_for_instrument(
-        instrument_code
+    contracts = (
+        get_diag_prices().db_futures_contract_price_data.get_merged_prices_for_instrument(
+            instrument_code
+        )
     )
     frames = {}
     latest_date = None
@@ -90,13 +100,22 @@ def current_front_contract_by_volume(instrument_code: str):
 
 
 def trim_spurious_trailing_rows(roll_calendar: pd.DataFrame, front_contract: int):
-    """从末尾往前砍掉 next_contract 不是前端合约的行。"""
+    """
+    从末尾往前砍掉「超前换月」的行：日历换到了比成交量第一合约**更远**的合约。
+
+    注意不能砍「落后」的行：刚换月 1–2 周内成交量第一仍是旧合约，
+    此时日历末端指向新合约（next < 成交量第一）是真实的，砍掉会把真实换月也削掉。
+    """
     trimmed = roll_calendar
-    while len(trimmed) > 1 and int(trimmed.iloc[-1].next_contract) != front_contract:
+    while len(trimmed) > 1 and int(trimmed.iloc[-1].next_contract) > front_contract:
         trimmed = trimmed.iloc[:-1]
 
-    if int(trimmed.iloc[-1].next_contract) != front_contract:
-        raise Exception("日历中没有以 %s 为前端合约的行，需要重新生成日历" % front_contract)
+    last_next_contract = int(trimmed.iloc[-1].next_contract)
+    if last_next_contract > front_contract:
+        raise Exception(
+            "日历末端的前端合约 %s 超前于成交量第一合约 %s，需要重新生成日历"
+            % (last_next_contract, front_contract)
+        )
 
     return trimmed
 
@@ -104,6 +123,10 @@ def trim_spurious_trailing_rows(roll_calendar: pd.DataFrame, front_contract: int
 def build_multiple_prices(
     instrument_code: str, roll_calendar, dict_of_closing_prices, adjust_calendar: bool = True
 ) -> futuresMultiplePrices:
+    from sysinit.futures.multipleprices_from_db_prices_and_csv_calendars_to_db import (
+        add_phantom_row,
+    )
+
     roll_parameters = csvRollParametersData().get_roll_parameters(instrument_code)
     roll_calendar = add_phantom_row(roll_calendar, dict_of_closing_prices, roll_parameters)
     if adjust_calendar:
@@ -157,7 +180,9 @@ def repair_instrument(
 
     if recent_only_cutoff is not None:
         stored = pd.DataFrame(
-            diag_prices.db_futures_multiple_prices_data.get_multiple_prices(instrument_code)
+            get_diag_prices().db_futures_multiple_prices_data.get_multiple_prices(
+                instrument_code
+            )
         )
         multiple_prices = futuresMultiplePrices(
             pd.concat(
@@ -181,7 +206,7 @@ def repair_instrument(
     if rows_dropped and recent_only_cutoff is None:
         roll_calendar_data.add_roll_calendar(instrument_code, trimmed, ignore_duplication=True)
 
-    db_multiple_prices = diag_prices.db_futures_multiple_prices_data
+    db_multiple_prices = get_diag_prices().db_futures_multiple_prices_data
     stored = pd.DataFrame(db_multiple_prices.get_multiple_prices(instrument_code))
     if (recent_only_cutoff is None) and last_multiple_date < stored.index[-1] - pd.Timedelta(days=7):
         raise Exception(
@@ -189,6 +214,10 @@ def repair_instrument(
         )
 
     db_multiple_prices.add_multiple_prices(instrument_code, multiple_prices, ignore_duplication=True)
+    from sysinit.futures.adjustedprices_from_db_multiple_to_db import (
+        process_adjusted_prices_single_instrument,
+    )
+
     process_adjusted_prices_single_instrument(
         instrument_code,
         csv_adj_data_path=arg_not_supplied,
@@ -231,7 +260,9 @@ def main(argv=None) -> int:
     if args.instruments:
         instrument_list = list(args.instruments)
     else:
-        instrument_list = diag_prices.db_futures_multiple_prices_data.get_list_of_instruments()
+        instrument_list = (
+            get_diag_prices().db_futures_multiple_prices_data.get_list_of_instruments()
+        )
     recent_only = set(args.recent_only or [])
     cutoff = pd.Timestamp(args.recent_from)
 
