@@ -506,13 +506,15 @@ def write_merged_prices_for_contract(
 
 def _keep_history_only_in_merged_file(diag_prices, contract_object, merged_prices):
     """
-    保留只存在于「合并文件」里的历史（FIR-137）。
+    保留只存在于「合并文件」里的历史（FIR-137），并保证同一天以新数据为准（FIR-159）。
 
     分频文件（Day@ / Hour@）可能只覆盖最近一段（例如历史是 CSV/Norgate 直接写进合并文件的，
     没有分频文件）。此时如果直接用分频文件的结果覆盖合并文件，历史会被静默丢掉
     （VIX/20260900 曾从 184 行被覆盖成 2 行）。
 
     做法：把库内已有的合并数据并进来，同一天以新数据为准。
+    注意「同一天」按日期（normalize）判断：库内历史通常是 00:00、IB 增量是 23:00，
+    不能简单地 concat + sort_index 后去重，否则时间戳更小的旧行会把新数据压掉。
     """
     try:
         existing_merged = diag_prices.get_merged_prices_for_contract_object(
@@ -526,12 +528,92 @@ def _keep_history_only_in_merged_file(diag_prices, contract_object, merged_price
 
     existing_frame = pd.DataFrame(existing_merged)
     new_frame = pd.DataFrame(merged_prices)
-    combined = pd.concat([new_frame, existing_frame]).sort_index()
-    # 同一天只保留一条（新数据在前 → 优先新数据）
+
+    combined = combine_merged_prices_new_data_first(new_frame, existing_frame)
+    _check_no_existing_history_is_lost(
+        diag_prices, contract_object, existing_frame, combined
+    )
+
+    return combined
+
+
+class mergedPricesWouldShrink(Exception):
+    """
+    合并文件保护失败：合并结果会丢掉库内已有的交易日（FIR-159 的护栏）。
+    """
+
+
+NEW_DATA_PRIORITY = 0
+EXISTING_DATA_PRIORITY = 1
+PRIORITY_COLUMN = "_keep_priority"
+
+
+def combine_merged_prices_new_data_first(
+    new_frame: pd.DataFrame, existing_frame: pd.DataFrame
+) -> pd.DataFrame:
+    """
+    按「日期」合并新旧数据，同一天保留新数据那一行（FIR-159）。
+
+    先用显式的优先级标记把新旧数据区分开（新=0、旧=1），再排序、按日期去重，
+    这样旧数据的时间戳是 00:00、新数据是 23:00 时也不会保留错行。
+    """
+    new_tagged = new_frame.copy()
+    new_tagged[PRIORITY_COLUMN] = NEW_DATA_PRIORITY
+    existing_tagged = existing_frame.copy()
+    existing_tagged[PRIORITY_COLUMN] = EXISTING_DATA_PRIORITY
+
+    combined = pd.concat([new_tagged, existing_tagged], sort=False)
+    combined = combined.sort_values(PRIORITY_COLUMN, kind="stable")
     combined = combined[
         ~pd.DatetimeIndex(combined.index).normalize().duplicated(keep="first")
     ]
-    return combined
+
+    return combined.drop(columns=PRIORITY_COLUMN).sort_index()
+
+
+def _check_no_existing_history_is_lost(
+    diag_prices,
+    contract_object,
+    existing_frame: pd.DataFrame,
+    combined: pd.DataFrame,
+):
+    """
+    护栏：合并结果不能丢掉库内已有的交易日；行数变少时也要留痕。
+
+    正常情况下（新旧数据按日期取并集）不会触发；这是一道防御性检查，
+    万一以后有人改坏了合并逻辑，也让写入被拒绝而不是静默截断历史。
+    """
+    existing_dates = _unique_dates_in_index(existing_frame.index)
+    combined_dates = _unique_dates_in_index(combined.index)
+    lost_dates = existing_dates.difference(combined_dates)
+
+    log = getattr(diag_prices, "log", None)
+
+    if len(lost_dates) > 0:
+        message = (
+            "合并文件保护失败：%s 合并后会丢掉库内已有的 %d 个交易日（%s），拒绝写入"
+            % (str(contract_object), len(lost_dates), _describe_dates(lost_dates))
+        )
+        if log is not None:
+            log.warning(message)
+        raise mergedPricesWouldShrink(message)
+
+    if len(combined) < len(existing_frame) and log is not None:
+        log.warning(
+            "合并结果 %d 行少于库内 %d 行（库内存在同日重复行，已按日期去重）%s"
+            % (len(combined), len(existing_frame), str(contract_object))
+        )
+
+
+def _unique_dates_in_index(index) -> pd.DatetimeIndex:
+    return pd.DatetimeIndex(pd.DatetimeIndex(index).normalize().unique()).sort_values()
+
+
+def _describe_dates(dates, max_dates: int = 5) -> str:
+    shown = [str(date.date()) for date in dates[:max_dates]]
+    if len(dates) > max_dates:
+        shown.append("...")
+    return ", ".join(shown)
 
 
 if __name__ == "__main__":

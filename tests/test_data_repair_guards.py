@@ -8,11 +8,17 @@
 import datetime
 
 import pandas as pd
+import pytest
 
 from sysinit.futures.build_multiple_prices_from_raw_data import (
     _trim_trailing_rows_without_price,
 )
-from sysproduction.update_historical_prices import _keep_history_only_in_merged_file
+from sysproduction.update_historical_prices import (
+    _check_no_existing_history_is_lost,
+    _keep_history_only_in_merged_file,
+    combine_merged_prices_new_data_first,
+    mergedPricesWouldShrink,
+)
 
 
 def _multiple_prices_row(price, forward, contract="20261200"):
@@ -101,3 +107,78 @@ def test_history_guard_handles_missing_existing_data():
     )
 
     assert len(merged) == 1
+
+
+def _single_row(price, timestamp):
+    return pd.DataFrame(
+        dict(OPEN=[price], HIGH=[price], LOW=[price], FINAL=[price], VOLUME=[1.0]),
+        index=pd.to_datetime([timestamp]),
+    )
+
+
+def test_new_data_wins_when_timestamps_differ_within_the_day():
+    # 库内历史是 00:00（CSV/Norgate 口径），新数据是 23:00（IB 口径）——
+    # 直接 concat + sort_index 会保留时间戳更小的旧行（FIR-159 实测过的 bug）
+    existing = _single_row(1.0, "2026-09-25 00:00:00")
+    rebuilt = _single_row(9.0, "2026-09-25 23:00:00")
+
+    merged = combine_merged_prices_new_data_first(rebuilt, existing)
+
+    assert len(merged) == 1
+    assert merged["FINAL"].iloc[0] == 9.0
+
+
+def test_new_data_wins_through_keep_history_helper():
+    existing = _single_row(1.0, "2026-09-25 00:00:00")
+    rebuilt = _single_row(9.0, "2026-09-25 23:00:00")
+
+    merged = _keep_history_only_in_merged_file(
+        _FakeDiagPrices(existing), contract_object=None, merged_prices=rebuilt
+    )
+
+    assert len(merged) == 1
+    assert merged["FINAL"].iloc[0] == 9.0
+
+
+def test_missing_existing_days_are_kept_and_sorted():
+    existing = pd.DataFrame(
+        dict(OPEN=[1.0, 2.0], HIGH=[1.0, 2.0], LOW=[1.0, 2.0], FINAL=[1.0, 2.0], VOLUME=[1.0, 2.0]),
+        index=pd.to_datetime(["2026-09-24 00:00:00", "2026-09-25 00:00:00"]),
+    )
+    rebuilt = _single_row(9.0, "2026-09-25 23:00:00")
+
+    merged = combine_merged_prices_new_data_first(rebuilt, existing)
+
+    assert merged.index.tolist() == list(
+        pd.to_datetime(["2026-09-24 00:00:00", "2026-09-25 23:00:00"])
+    )
+    assert merged["FINAL"].tolist() == [1.0, 9.0]
+
+
+def test_guard_raises_when_an_existing_trading_day_would_be_lost():
+    existing = pd.DataFrame(
+        dict(OPEN=[1.0, 2.0], HIGH=[1.0, 2.0], LOW=[1.0, 2.0], FINAL=[1.0, 2.0], VOLUME=[1.0, 2.0]),
+        index=pd.to_datetime(["2026-09-24", "2026-09-25"]),
+    )
+    # 模拟「合并逻辑被改坏」：结果里只剩 09-25
+    broken_combined = _single_row(2.0, "2026-09-25")
+
+    with pytest.raises(mergedPricesWouldShrink):
+        _check_no_existing_history_is_lost(
+            _FakeDiagPrices(existing),
+            contract_object=None,
+            existing_frame=existing,
+            combined=broken_combined,
+        )
+
+
+def test_guard_is_silent_when_no_day_is_lost():
+    existing = _single_row(1.0, "2026-09-25 00:00:00")
+    combined = _single_row(9.0, "2026-09-25 23:00:00")
+
+    _check_no_existing_history_is_lost(
+        _FakeDiagPrices(existing),
+        contract_object=None,
+        existing_frame=existing,
+        combined=combined,
+    )

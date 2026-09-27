@@ -183,13 +183,18 @@ def align_prices_by_date(
     closing）。两者混在同一品种里时，换月日两侧合约永远没有相同的时间戳，
     adjust_to_price_series 找不到可落位的日期，会把日历截断、前端停在过期合约上。
     构建之前按日期对齐即可消除这个差异（原始数据不动）。
+
+    同日多条时保留**时间戳最大**的一条（先把原始时间戳排序、再按日期去重），
+    因此乱序输入也不会保留旧行。
     """
     aligned_prices = {}
     for contract, prices in dict_of_futures_contract_prices.items():
         series = pd.Series(prices).copy()
+        # 先按原始时间戳排序，再去重：keep="last" 才是「当日最新的一条」
+        series = series.sort_index(kind="stable")
         index = pd.DatetimeIndex(series.index)
         series.index = index.normalize()
-        series = series[~series.index.duplicated(keep="last")].sort_index()
+        series = series[~series.index.duplicated(keep="last")]
         aligned_prices[contract] = series
 
     return dictFuturesContractFinalPrices(aligned_prices)
