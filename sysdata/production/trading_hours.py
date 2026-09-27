@@ -3,6 +3,7 @@ from sysobjects.production.trading_hours.dict_of_weekly_trading_hours_any_day im
     dictOfDictOfWeekdayTradingHours,
 )
 from sysdata.production.trading_hours_timezone import (
+    UnknownTimezone,
     convert_hours_to_local_time,
     hours_spec_from_timezone_aware_entry,
     is_timezone_aware_entry,
@@ -31,14 +32,25 @@ def _convert_entry_to_local_time_if_needed(entry):
     """
     支持「交易所时区 + 交易所当地时段」的写法，读取时自动换算成本机时间；
     不带 timezone 的旧写法（本机时间）原样返回。
+
     """
     if not is_timezone_aware_entry(entry):
         return entry
 
-    return convert_hours_to_local_time(
-        hours_spec=hours_spec_from_timezone_aware_entry(entry),
-        timezone_name=entry["timezone"],
-    )
+    hours_spec = hours_spec_from_timezone_aware_entry(entry)
+    try:
+        return convert_hours_to_local_time(
+            hours_spec=hours_spec,
+            timezone_name=entry["timezone"],
+        )
+    except UnknownTimezone as error:
+        # 一个条目写错时区不该让整份交易时间配置读不出来；
+        # 退回「把交易所当地时段当本机时间用」，并留一条告警。
+        print(
+            "WARNING: %s；%s 的交易时段按本机时间处理（不做时区换算）"
+            % (error, entry["timezone"])
+        )
+        return hours_spec
 
 
 def write_trading_hours(

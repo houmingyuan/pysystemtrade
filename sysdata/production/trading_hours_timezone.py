@@ -44,15 +44,51 @@ ONE_DAY = datetime.timedelta(days=1)
 ONE_SECOND = datetime.timedelta(seconds=1)
 
 
+class UnknownTimezone(Exception):
+    """配置里写了不认识的时区名。"""
+
+
+class InvalidTradingHoursSpec(Exception):
+    """时区写法的交易时段定义不成形（键名拼错、既没有 hours 也没有 weekday 键）。"""
+
+
 def is_timezone_aware_entry(spec) -> bool:
     return isinstance(spec, dict) and "timezone" in spec
 
 
 def hours_spec_from_timezone_aware_entry(spec) -> object:
-    """取出时区写法里的时段部分：优先 'hours'，否则把除 timezone 以外的键当作时段定义。"""
+    """
+    取出时区写法里的时段部分：优先 'hours'，否则把除 timezone 以外的键当作时段定义。
+
+    键名拼错（例如 `hour:` / `Hours:`）以前会静默变成「当天零交易窗口」，
+    现在直接报错——那是一个会悄悄让策略不交易的坑。
+    """
     if "hours" in spec:
         return spec["hours"]
-    return {key: value for key, value in spec.items() if key != "timezone"}
+
+    weekday_keys = {
+        key: value for key, value in spec.items() if key in WEEKDAY_NAMES
+    }
+    unrecognised_keys = [
+        key
+        for key in spec.keys()
+        if key != "timezone" and key not in WEEKDAY_NAMES
+    ]
+
+    if unrecognised_keys:
+        raise InvalidTradingHoursSpec(
+            "交易时间配置 %s 里有无法识别的键 %s；"
+            "时区写法要么用 'hours'，要么用 weekday 名（%s）"
+            % (sorted(spec.keys()), sorted(unrecognised_keys), ", ".join(WEEKDAY_NAMES))
+        )
+
+    if not weekday_keys:
+        raise InvalidTradingHoursSpec(
+            "交易时间配置 %s 里既没有 'hours' 也没有任何 weekday 键，无法确定交易时段"
+            % sorted(spec.keys())
+        )
+
+    return weekday_keys
 
 
 def convert_hours_to_local_time(
@@ -66,7 +102,12 @@ def convert_hours_to_local_time(
 
     :param reference_date: 计算「该 weekday 的下一个发生日」时的起点，默认今天（测试可注入）
     """
-    exchange_timezone = ZoneInfo(timezone_name)
+    try:
+        exchange_timezone = ZoneInfo(timezone_name)
+    except Exception as error:
+        raise UnknownTimezone(
+            "未知时区 %r（%s: %s）" % (timezone_name, type(error).__name__, error)
+        )
     if local_timezone is None:
         local_timezone = _system_local_timezone()
 

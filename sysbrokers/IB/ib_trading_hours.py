@@ -14,6 +14,9 @@ from syscore.fileutils import (
 )
 from sysdata.config.production_config import get_production_config
 from sysdata.production.trading_hours import read_trading_hours
+from syslogging.logger import get_logger
+
+logger = get_logger("ib_trading_hours")
 
 IB_CONFIG_TRADING_HOURS_FILE = "sysbrokers.IB.ib_config_trading_hours.yaml"
 PRIVATE_CONFIG_TRADING_HOURS_FILE = "private_config_trading_hours.yaml"
@@ -90,24 +93,60 @@ def parse_trading_hours_string(
         if len(sessions_today) == 1:
             # 一天只有一段：开盘 +1、收盘 -1（首尾是同一段）
             only_session = sessions_today[0]
-            sessions_today[0] = tradingHours(
-                only_session.opening_time + ONE_HOUR,
-                only_session.closing_time - ONE_HOUR,
+            sessions_today[0] = _fallback_if_trim_inverts_the_session(
+                tradingHours(
+                    only_session.opening_time + ONE_HOUR,
+                    only_session.closing_time - ONE_HOUR,
+                ),
+                only_session,
+                "当天唯一一段",
             )
         else:
             first_session = sessions_today[0]
             last_session = sessions_today[-1]
-            sessions_today[0] = tradingHours(
-                first_session.opening_time + ONE_HOUR, first_session.closing_time
+            sessions_today[0] = _fallback_if_trim_inverts_the_session(
+                tradingHours(
+                    first_session.opening_time + ONE_HOUR, first_session.closing_time
+                ),
+                first_session,
+                "当天第一段",
             )
-            sessions_today[-1] = tradingHours(
-                last_session.opening_time, last_session.closing_time - ONE_HOUR
+            sessions_today[-1] = _fallback_if_trim_inverts_the_session(
+                tradingHours(
+                    last_session.opening_time, last_session.closing_time - ONE_HOUR
+                ),
+                last_session,
+                "当天最后一段",
             )
         list_of_open_times.extend(sessions_today)
 
     list_of_open_times = sorted(list_of_open_times, key=lambda session: session.opening_time)
 
     return listOfTradingHours(list_of_open_times)
+
+
+def _fallback_if_trim_inverts_the_session(
+    trimmed_session: tradingHours, original_session: tradingHours, description: str
+) -> tradingHours:
+    """
+    段落短于 2 小时时，「开盘 +1 / 收盘 -1」的裁剪会把区间裁成倒挂（如 10:00 → 08:45），
+    下游取交集会得到空窗口却没有任何提示。这里回退成未裁剪的原时段并打 warning。
+    """
+    if trimmed_session.opening_time < trimmed_session.closing_time:
+        return trimmed_session
+
+    logger.warning(
+        "按天裁剪后交易时段倒挂（%s）：%s → %s；回退为未裁剪的 %s → %s"
+        % (
+            description,
+            trimmed_session.opening_time,
+            trimmed_session.closing_time,
+            original_session.opening_time,
+            original_session.closing_time,
+        )
+    )
+
+    return original_session
 
 
 def _exchange_trading_date_from_entry(string_for_day: str) -> str:

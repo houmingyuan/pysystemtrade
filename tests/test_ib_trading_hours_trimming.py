@@ -71,3 +71,20 @@ def test_closed_days_are_skipped():
     raw = "20260927:CLOSED;20260928:0800-20260928:1900"
 
     assert _hours(raw) == [("28/09 09:00", "28/09 18:00")]
+
+
+def test_short_single_session_is_not_trimmed_into_an_inverted_window():
+    # 45 分钟的一段：+1h / -1h 会裁出 10:00 → 08:45（倒挂）。应回退成原时段并打 warning。
+    raw = "20260928:0915-20260928:1000"
+
+    assert _hours(raw) == [("28/09 09:15", "28/09 10:00")]
+
+
+def test_short_first_session_falls_back_but_last_session_still_trimmed():
+    # 第一段只有 45 分钟（回退），最后一段够长（照常 -1h）
+    raw = "20260928:0915-20260928:1000;20260928:1300-20260928:1700"
+
+    assert _hours(raw) == [
+        ("28/09 09:15", "28/09 10:00"),
+        ("28/09 13:00", "28/09 16:00"),
+    ]
