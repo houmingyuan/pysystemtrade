@@ -13,12 +13,20 @@
 #   3. IB 期货合约价格      sysproduction.update_historical_prices
 #   4. multiple prices      sysinit/henrik/update_multiple_prices_tolerant.py
 #   5. adjusted prices      sysinit/henrik/update_adjusted_prices_tolerant.py
-#   6. IB 汇率              sysproduction.update_fx_prices
+#   6. IB 汇率              sysinit/henrik/spotfx_from_ib_to_db.py
+#      （spot FX 行情权限在实盘账户上，走 config.fx_data）
+#   7. 数据面校验           sysinit/henrik/check_daily_data_update.py
+#      （步骤 exit 0 不代表数据推进了：尖峰被拒 / 采样表为空 / multiple 没跟上）
 #
 # 用法：
 #   run_daily_data_update                  # 全部步骤
 #   run_daily_data_update --skip-futures   # 只更新汇率
 #   run_daily_data_update --skip-fx        # 只更新期货链路
+#
+# 环境变量：
+#   DATA_CHECK_MAX_SPIKES   数据面校验允许的被拒合约数（默认 0，即任何被拒都算异常）
+#                           正常日应为 0；如尖峰噪声太多可临时放宽
+#   DATA_CHECK_MAX_STALE_DAYS  multiple prices 允许落后合约价格的天数（默认 7）
 #
 # 由 ~/Library/LaunchAgents/com.henrik.systrade.update.plist 调度，
 # 每日 08:00 运行。全部路径写绝对路径，不依赖 PATH / ~ 软链接 / conda activate。
@@ -38,6 +46,10 @@ VOLUME_CHECK_INTERVAL=30
 UPDATE_FUTURES=true
 UPDATE_FX=true
 
+# ---------- 数据面校验阈值 ----------
+DATA_CHECK_MAX_SPIKES=${DATA_CHECK_MAX_SPIKES:-0}
+DATA_CHECK_MAX_STALE_DAYS=${DATA_CHECK_MAX_STALE_DAYS:-7}
+
 # ---------- 日志（卷未挂载前只输出到终端，launchd 会收进本地日志） ----------
 log() {
     local level=$1
@@ -55,12 +67,13 @@ trap 'log "ERROR" "脚本被外部终止 (term/int/hup)，中断于上述最后�
 trap 'rc=$?; log "INFO" "脚本退出，退出码 $rc"' EXIT
 
 show_help() {
+    local exit_code=${1:-0}
     echo "Usage: $0 [options]"
     echo "Options:"
     echo "  -f, --skip-futures     Skip updating futures data"
     echo "  -x, --skip-fx          Skip updating forex data"
     echo "  -h, --help             Show this help message"
-    exit 0
+    exit "$exit_code"
 }
 
 # ---------- 参数解析 ----------
@@ -68,10 +81,10 @@ while [[ $# -gt 0 ]]; do
     case $1 in
         -f|--skip-futures) UPDATE_FUTURES=false; shift ;;
         -x|--skip-fx)      UPDATE_FX=false;      shift ;;
-        -h|--help)         show_help ;;
+        -h|--help)         show_help 0 ;;
         *)
             log "ERROR" "Unknown option: $1"
-            show_help
+            show_help 1
             ;;
     esac
 done
@@ -128,8 +141,15 @@ fi
 
 # ---------- 汇率：IB ----------
 if [ "$UPDATE_FX" = true ]; then
-    run_step "IB 汇率" "$PY" -u -m sysproduction.update_fx_prices
+    # spot FX 行情权限挂在实盘账户上（FIR-158 实测），所以走读 config.fx_data 的本地脚本
+    run_step "IB 汇率" "$PY" -u "$PST_DIR/sysinit/henrik/spotfx_from_ib_to_db.py"
 fi
+
+# ---------- 数据面校验：数据真的推进了吗 ----------
+run_step "数据面校验" "$PY" -u "$PST_DIR/sysinit/henrik/check_daily_data_update.py" \
+    --log "$LOG_FILE" \
+    --max-spikes "$DATA_CHECK_MAX_SPIKES" \
+    --max-stale-days "$DATA_CHECK_MAX_STALE_DAYS"
 
 # ---------- 汇总 ----------
 if [ ${#FAILED_STEPS[@]} -eq 0 ]; then
