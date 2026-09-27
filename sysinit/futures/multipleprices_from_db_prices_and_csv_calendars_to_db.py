@@ -24,7 +24,10 @@ from sysobjects.contract_dates_and_expiries import contractDate
 from sysdata.csv.csv_roll_calendars import csvRollCalendarData
 from sysdata.csv.csv_multiple_prices import csvFuturesMultiplePricesData
 from sysdata.csv.csv_roll_parameters import csvRollParametersData
-from sysinit.futures.build_roll_calendars import adjust_to_price_series
+from sysinit.futures.build_roll_calendars import (
+    adjust_to_price_series,
+    align_prices_by_date,
+)
 from sysobjects.multiple_prices import futuresMultiplePrices
 
 
@@ -101,6 +104,11 @@ def process_multiple_prices_single_instrument(
     dict_of_futures_contract_closing_prices = (
         dict_of_futures_contract_prices.final_prices()
     )
+    # 价格库里 Norgate(00:00) 与 IB(23:00/盘中) 两种时间戳并存，构建 multiple prices 前
+    # 先按日期对齐，否则三腿（PRICE/FORWARD/CARRY）会对不齐、末端出现 PRICE 为空的尾巴
+    dict_of_futures_contract_closing_prices = align_prices_by_date(
+        dict_of_futures_contract_closing_prices
+    )
 
     if roll_calendar is arg_not_supplied:
         roll_calendar = csv_roll_calendars.get_roll_calendar(instrument_code)
@@ -147,6 +155,10 @@ def adjust_roll_calendar(instrument_code, roll_calendar):
         instrument_code
     )
     dict_of_futures_contract_prices = dict_of_prices.final_prices()
+    # 价格库里 Norgate(00:00) 与 IB(23:00) 两种时间戳并存，换月对齐前先按日期对齐
+    dict_of_futures_contract_prices = align_prices_by_date(
+        dict_of_futures_contract_prices
+    )
     roll_calendar = adjust_to_price_series(
         roll_calendar, dict_of_futures_contract_prices
     )

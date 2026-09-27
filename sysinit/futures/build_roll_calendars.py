@@ -173,6 +173,28 @@ localRowData = namedtuple(
 _last_row = object()
 
 
+def align_prices_by_date(
+    dict_of_futures_contract_prices: dictFuturesContractFinalPrices,
+) -> dictFuturesContractFinalPrices:
+    """
+    把各合约的价格时间戳对齐到「日期」粒度（当日 00:00），同日多条保留最后一条。
+
+    价格库可能混有两种日线口径：CSV/Norgate 导入的是 00:00，IB 取数是 23:00（PST 的 notional
+    closing）。两者混在同一品种里时，换月日两侧合约永远没有相同的时间戳，
+    adjust_to_price_series 找不到可落位的日期，会把日历截断、前端停在过期合约上。
+    构建之前按日期对齐即可消除这个差异（原始数据不动）。
+    """
+    aligned_prices = {}
+    for contract, prices in dict_of_futures_contract_prices.items():
+        series = pd.Series(prices).copy()
+        index = pd.DatetimeIndex(series.index)
+        series.index = index.normalize()
+        series = series[~series.index.duplicated(keep="last")].sort_index()
+        aligned_prices[contract] = series
+
+    return dictFuturesContractFinalPrices(aligned_prices)
+
+
 def adjust_to_price_series(
     approx_calendar: pd.DataFrame,
     dict_of_futures_contract_prices: dictFuturesContractFinalPrices,

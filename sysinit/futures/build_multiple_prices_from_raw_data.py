@@ -87,7 +87,37 @@ def create_multiple_price_stack_from_raw_data(
     # end of loop
     all_price_data_stack = pd.concat(all_price_data_stack, axis=0)
 
+    all_price_data_stack = _trim_trailing_rows_without_price(all_price_data_stack)
+
     return all_price_data_stack
+
+
+def _trim_trailing_rows_without_price(all_price_data: pd.DataFrame) -> pd.DataFrame:
+    """
+    截掉末端 PRICE 为空的尾巴。
+
+    同一品种各腿的最后一个有价日可能不同（例如前端合约到 09-25、次月合约到 09-26），
+    此时 series 里会多出 PRICE 为空的尾行，下游（策略取当前价）会拿不到值。
+    multiple prices 的语义是「我今天持有的 priced 合约的价格」，所以序列应该止于
+    priced 合约的最后一个有价日。
+    """
+    if len(all_price_data) == 0:
+        return all_price_data
+
+    price_column = all_price_data[price_name].isna()
+    if not bool(price_column.iloc[-1]):
+        return all_price_data
+
+    last_valid_position = None
+    for position in range(len(price_column) - 1, -1, -1):
+        if not bool(price_column.iloc[position]):
+            last_valid_position = position
+            break
+
+    if last_valid_position is None:
+        return all_price_data
+
+    return all_price_data.iloc[: last_valid_position + 1]
 
 
 def _get_price_data_between_rolls(
