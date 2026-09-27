@@ -18,7 +18,7 @@ AUD-SGX,SGX Australian Dollar in US Dollar Futures,25000,USD,FX,2.85,0,0,ASIA
 AUDCAD,Australlian dollar CAD,200000,CAD,FX,0,0,0,US
 AUDJPY,Australlian dollar Yen CME,200000,JPY,FX,329.4,0,0,US
 AUDJPY-SGX,SGX Australian Dollar in Japanese Yen Futures,25000,JPY,FX,285,0,0,ASIA
-AUS10,ASX 10 year bond,1000,AUD,Bond,0,0,0,ASIA
+AUS10,ASX 10 year bond,10000,AUD,Bond,0,0,0,ASIA
 AUS3,ASX 3 year bond,1000,AUD,Bond,0,0,0,ASIA
 AUSCASH,30 Day Interbank Cash Rate,2466,AUD,STIR,4.5,0,0,ASIA
 AUS_BILL90,ASX 90 day bank bill,2466,AUD,STIR,0,0,0,ASIA
@@ -368,7 +368,7 @@ NIKKEI-CME,Dollar Denominated Nikkei 225 Index,5,USD,Equity,0,0,0,US
 NIKKEI-JPY,Yen Denominated Nikkei 225 Index,500,JPY,Equity,0.85,0,0,US
 NIKKEI-JPY_mini,E-mini Yen Denominated Nikkei 225 Index,100,JPY,Equity,0,0,0,US
 NIKKEI-SGX,SGX: Nikkei 225,500,JPY,Equity,0,0,0,ASIA
-NIKKEI-SGX_mini,SGX: NIKKEI 225 Mini,100,JPY,Equity,0,0,0,ASIA
+NIKKEI-SGX_mini,SGX: NIKKEI 225 Mini,10,JPY,Equity,0,0,0,ASIA
 NIKKEI-SGX-DIV,Nikkei Stock Average Dividend Point Index,10000,JPY,Equity,0,0,0,ASIA
 NIKKEI-SGX-USD,SGX: USD Nikkei 225 Index,5,USD,Equity,0,0,0,ASIA
 NIKKEI400,JPX-Nikkei Index 400,100,JPY,Equity,50,0,0,ASIA
