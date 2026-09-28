@@ -66,17 +66,34 @@ def fetch_futures_returns(data, instrument_code, contract_date_str) -> pd.Series
 
 
 def main(argv=None) -> int:
+    from sysbrokers.IB.ib_connection_defaults import ib_defaults
+
+    default_host, default_port, __ = ib_defaults()
+
     parser = argparse.ArgumentParser(description="用 ETF 核对金属期货尖峰是否真实")
     parser.add_argument("--duration", default="1 Y")
-    parser.add_argument("--port", type=int, default=4001)
+    parser.add_argument(
+        "--host",
+        default=default_host,
+        help="IB Gateway 地址；默认取生产配置的顶层 ib_ipaddress",
+    )
+    parser.add_argument(
+        "--port",
+        type=int,
+        default=default_port,
+        help="IB API 端口；默认取生产配置的顶层 ib_port（纸面交易连接）",
+    )
     parser.add_argument("--client-id", type=int, default=991)
     args = parser.parse_args(argv)
 
     columns = {}
     with dataBlob(log_name="Metal-Spike-Vs-ETF") as data:
         ib = IB()
-        ib.connect("127.0.0.1", args.port, clientId=args.client_id, timeout=20)
-        print("已连接 IB 端口 %s（clientId=%s）" % (args.port, args.client_id), flush=True)
+        ib.connect(args.host, args.port, clientId=args.client_id, timeout=20)
+        print(
+            "已连接 IB %s:%s（clientId=%s）" % (args.host, args.port, args.client_id),
+            flush=True,
+        )
 
         for symbol in ETF_SYMBOLS:
             try:

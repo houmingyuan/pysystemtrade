@@ -92,6 +92,10 @@ def probe_contract(ib: IB, spec: str) -> None:
 
 
 def main(argv=None) -> int:
+    from sysbrokers.IB.ib_connection_defaults import ib_defaults
+
+    default_host, default_port, __ = ib_defaults()
+
     parser = argparse.ArgumentParser(description="探测 IB 期货符号")
     parser.add_argument("--queries", nargs="*", default=[])
     parser.add_argument(
@@ -100,13 +104,23 @@ def main(argv=None) -> int:
         default=[],
         help="形如 SYMBOL:EXCHANGE:CURRENCY:EXPIRY 的合约，例如 SXF:MX:CAD:202612",
     )
-    parser.add_argument("--port", type=int, default=4001)
+    parser.add_argument(
+        "--host",
+        default=default_host,
+        help="IB Gateway 地址；默认取生产配置的顶层 ib_ipaddress",
+    )
+    parser.add_argument(
+        "--port",
+        type=int,
+        default=default_port,
+        help="IB API 端口；默认取生产配置的顶层 ib_port（纸面交易连接）",
+    )
     parser.add_argument("--client-id", type=int, default=993)
     args = parser.parse_args(argv)
 
     ib = IB()
-    ib.connect("127.0.0.1", args.port, clientId=args.client_id, timeout=20)
-    print("已连接 IB %s" % args.port, flush=True)
+    ib.connect(args.host, args.port, clientId=args.client_id, timeout=20)
+    print("已连接 IB %s:%s" % (args.host, args.port), flush=True)
     try:
         for query in args.queries:
             probe(ib, query)
