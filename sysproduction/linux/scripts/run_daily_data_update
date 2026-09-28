@@ -14,7 +14,7 @@
 #   4. multiple prices      sysinit/henrik/update_multiple_prices_tolerant.py
 #   5. adjusted prices      sysinit/henrik/update_adjusted_prices_tolerant.py
 #   6. IB 汇率              sysinit/henrik/spotfx_from_ib_to_db.py
-#      （spot FX 行情权限在实盘账户上，走 config.fx_data）
+#      （spot FX 行情权限在实盘账户上，走 private_config.yaml 顶层 fx_data）
 #   7. 数据面校验           sysinit/henrik/check_daily_data_update.py
 #      （步骤 exit 0 不代表数据推进了：尖峰被拒 / 采样表为空 / multiple 没跟上）
 #
@@ -141,7 +141,7 @@ fi
 
 # ---------- 汇率：IB ----------
 if [ "$UPDATE_FX" = true ]; then
-    # spot FX 行情权限挂在实盘账户上（FIR-158 实测），所以走读 config.fx_data 的本地脚本
+    # spot FX 行情权限挂在实盘账户上（FIR-158 实测），所以走读顶层 fx_data 的本地脚本
     run_step "IB 汇率" "$PY" -u "$PST_DIR/sysinit/henrik/spotfx_from_ib_to_db.py"
 fi
 
