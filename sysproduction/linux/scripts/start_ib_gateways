@@ -1,0 +1,69 @@
+#!/bin/zsh
+# 启动两个 IB Gateway 实例（macOS）：
+#   纸面实例：/Users/henrik/Applications/IB Gateway 10.45/          设置目录 ~/Jts        API 4002（交易 + 期货数据）
+#   实盘实例：/Users/henrik/Applications/IB Gateway 10.45 live/     设置目录 ~/Jts-live   API 4001（spot FX 取数）
+#
+# 前提：实盘副本的 ibgateway.vmoptions 里必须有
+#         -DjtsConfigDir=/Users/henrik/Jts-live
+#       否则两个实例会共用 ~/Jts，只能有一个实例运行。
+#       该行写在 "### keep on update" 之后，不会被应用更新清除。
+#
+# 用法：
+#   start_ib_gateways             # 拉起两个实例（已在运行的不重复启动）
+#   start_ib_gateways --status    # 只查看进程与 API 端口状态
+#
+# 说明：登录（含 2FA）需人工完成，脚本只负责把实例启动到登录界面。
+
+set -u
+
+PAPER_APP="/Users/henrik/Applications/IB Gateway 10.45/IB Gateway 10.45.app"
+LIVE_APP="/Users/henrik/Applications/IB Gateway 10.45 live/IB Gateway 10.45.app"
+LIVE_SETTINGS="/Users/henrik/Jts-live"
+
+port_listening() {
+    lsof -nP -iTCP:"$1" -sTCP:LISTEN >/dev/null 2>&1
+}
+
+app_running() {
+    pgrep -f "$1" >/dev/null 2>&1
+}
+
+status() {
+    if port_listening 4001; then
+        echo "实盘 API 4001：已监听"
+    else
+        echo "实盘 API 4001：未监听（需要登录实盘实例）"
+    fi
+    if port_listening 4002; then
+        echo "纸面 API 4002：已监听"
+    else
+        echo "纸面 API 4002：未监听（需要登录纸面实例）"
+    fi
+}
+
+if [ "${1:-}" = "--status" ]; then
+    status
+    exit 0
+fi
+
+if app_running "$PAPER_APP"; then
+    echo "纸面实例已在运行"
+else
+    echo "启动纸面实例（设置目录 ~/Jts）..."
+    open -n "$PAPER_APP"
+fi
+
+if app_running "$LIVE_APP"; then
+    echo "实盘实例已在运行"
+else
+    if [ ! -f "$LIVE_SETTINGS/jts.ini" ]; then
+        echo "警告：$LIVE_SETTINGS/jts.ini 不存在，请确认实盘副本的 vmoptions 已配置独立的 jtsConfigDir"
+    fi
+    echo "启动实盘实例（设置目录 $LIVE_SETTINGS）..."
+    open -n "$LIVE_APP"
+fi
+
+sleep 20
+status
+echo
+echo "若端口未监听，请在 Gateway 窗口完成登录：实盘实例需要 2FA。"

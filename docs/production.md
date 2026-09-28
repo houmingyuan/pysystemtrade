@@ -2645,6 +2645,14 @@ cron is deprecated on macOS, and `@reboot` entries do not fire reliably there, s
 - Set `LimitLoadToSessionType` to `Aqua` if the job needs the logged-in GUI session (for example to reach a desktop IB Gateway).
 - MongoDB is normally installed as a launchd service rather than started from cron, so the `@reboot` line in the supplied crontab is usually not needed.
 
+#### Running two IB Gateway instances on macOS
+
+A paper account does not have the market data entitlement for `IDEALPRO` spot FX (the API returns error 162 / 10089), so fetching FX prices from a live account while trading on a paper account means running two Gateways at the same time:
+
+- Install IB Gateway a second time (a copy of the existing install directory is enough) and give the second install its own settings directory by adding `-DjtsConfigDir=<settings directory>` to that copy's `ibgateway.vmoptions`, below the `### keep on update` marker so that application updates keep the line. Without it both instances share `~/Jts` and only one of them can run.
+- The API port follows the login mode of each instance: live 4001, paper 4002. Each instance therefore needs to log in with the matching mode.
+- `sysproduction/linux/scripts/start_ib_gateways` starts both instances and reports the port status (`--status` only reports). The login itself, including two-factor authentication, stays manual.
+
 #### Process configuration
 
 Process configuration is governed by the following config parameters (in [/syscontrol/control_config.yaml](/syscontrol/control_config.yaml), or these will be overridden by `/private/private_control_config.yaml`):
