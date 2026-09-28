@@ -76,7 +76,7 @@ adjusted prices 由 multiple prices 再做 back-adjustment 生成
 （`sysinit/futures/adjustedprices_from_db_multiple_to_db.py:process_adjusted_prices_single_instrument`），
 所以日历/ multiple 一改，两者都要重建。
 
-## 5. `adjust_to_price_series` 的真实行为（最容易踩的坑）
+## 5. `adjust_to_price_series` 的真实行为（最容易出错之处）
 
 * 逐行寻找「current/next(/carry) 都有价」的**离名义换月日最近**的日期，
   `_find_closest_valid_date_to_approx_roll_date()` **没有前后窗口限制**；

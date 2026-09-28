@@ -61,7 +61,7 @@ def hours_spec_from_timezone_aware_entry(spec) -> object:
     取出时区写法里的时段部分：优先 'hours'，否则把除 timezone 以外的键当作时段定义。
 
     键名拼错（例如 `hour:` / `Hours:`）以前会静默变成「当天零交易窗口」，
-    现在直接报错——那是一个会悄悄让策略不交易的坑。
+    现在直接报错——该问题会静默导致策略不交易。
     """
     if "hours" in spec:
         return spec["hours"]

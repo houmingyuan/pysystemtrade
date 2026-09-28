@@ -6,7 +6,7 @@
 `ib_ipaddress` / `ib_port` / `broker_account`（即交易路径那套连接参数）。
 
 这样交易路径继续使用纸面账户（ib_port / broker_account），
-而 FX 行情可以走实盘账户（行情订阅与额度挂在实盘账户上）。
+而 FX 行情可以使用实盘账户（行情订阅与额度属于实盘账户）。
 
 注意：private_config.yaml 只有**顶层键**会被 production_config 读到，所以
 `fx_data` 也必须写在顶层（写在 `config:` 块里不会生效）。

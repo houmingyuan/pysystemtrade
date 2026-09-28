@@ -2,7 +2,7 @@
 
 > 2026-09-27 编写。整理的起因是排查 HANG / HANGTEC 的「交易时间」显示异常，发现
 > 「行情时间戳」「交易时间窗口」「调度时间」三类时间容易互相混淆，而且配置层级、
-> 时区口径、夏令时都有坑。本文把三类时间的口径、配置位置、代码位置与排查方法固定下来。
+> 时区口径与夏令时都容易出错。本文把三类时间的口径、配置位置、代码位置与排查方法固定下来。
 
 ## 0. 先分清三类「时间」
 
@@ -88,7 +88,7 @@ listOfTradingHours
 ### 2.2 时区换算：`GMT_offset_hours`
 
 * 位置：**`private_config.yaml` 的顶层键**（不是 `config:` 下面；只有顶层会被
-  `production_config` 读到，写在 `config:` 里等于没写，实际会用 `defaults.yaml` 的 0）。
+  `production_config` 读到，写在 `config:` 里不会生效，实际使用 `defaults.yaml` 的 0）。
 * 含义：**本机时区相对 GMT 的偏移**（本机 Asia/Shanghai → 8；英国夏令时 1、冬令时 0）。
 * 公式：`换算小时 = 交易所时区固定偏移（代码里的表） + GMT_offset_hours`。
   例：`Hongkong` 表的偏移是 -8，配 `GMT_offset_hours=8` → 净 0（香港时间 = 本机时间）；
@@ -270,7 +270,7 @@ python -c "from sysproduction.interactive_diagnostics import interactive_diagnos
 | 合并文件历史保护 | `sysproduction/update_historical_prices.py`：`_keep_history_only_in_merged_file()` |
 | 流程调度时间 | `syscontrol/control_config.yaml` |
 
-## 6. 踩过的坑（排查清单）
+## 6. 常见问题（排查清单）
 
 1. **配置层级写错**：`private_config.yaml` 里只有**顶层键**会被 `production_config` 读到。
    2026-09-28 起已把 `private_config.yaml` 的 `config:` 嵌套块拆掉：`fx_data` 以及存储/备份

@@ -5,7 +5,7 @@
 行写成 (换月日, current=换月前持有, next=换月后持有, carry=按 rollconfig 推导)，
 与 PST 的 roll calendar 语义一致（row 的 next_contract 是换月后持有的合约）。
 
-carry 合约**按 rollconfig 的 CarryOffset 推导**（-1 = 上月、+1 = 下月），不再写死成
+carry 合约**按 rollconfig 的 CarryOffset 推导**（-1 = 上月、+1 = 下月），不再固定为
 「换月前持有」——那样会把 VIX 这类 CarryOffset=+1 的口径改回去。
 
 对单日成交量毛刺用 rolling(3).median() 平滑；只接受向前（月份变大）的切换。
