@@ -201,6 +201,7 @@ Table of Contents
    * [Pysystemtrade scheduling](#pysystemtrade-scheduling)
       * [Configuring the scheduling](#configuring-the-scheduling)
          * [The crontab](#the-crontab)
+         * [Scheduling on macOS](#scheduling-on-macos)
          * [Process configuration](#process-configuration)
       * [System monitor and dashboard](#system-monitor-and-dashboard)
       * [Troubleshooting?](#troubleshooting)
@@ -301,7 +302,8 @@ You need to:
     - Create a YAML config file to run the live production 'backtest'. For speed, I recommend you do not estimate parameters, but use fixed parameters, using the [yaml_config_with_estimated_parameters method of systemDiag](/systems/diagoutput.py) function to output these to a YAML file.
 - Scheduling:
     - Initialise the [supplied crontab](/sysproduction/linux/crontab). Note if you have put your code or echos somewhere else you will need to modify the directory references at the top of the crontab.
-    - All scripts executable by the crontab need to be executable, so do the following: `cd $SCRIPT_PATH` ; `sudo chmod +x *.*`
+    - The supplied crontab is written for cron on Linux. On macOS cron is deprecated and `@reboot` is unreliable; use launchd instead (see [Scheduling](#scheduling) below).
+    - All scripts executable by the scheduler need to be executable, so do the following: `cd $SCRIPT_PATH` ; `sudo chmod +x *` (the scripts in the git checkout should already have the executable bit set)
 - Consider adding [position and trade limits](#interactive-controls)
 - Review the [configuration options](#configuration-files) available
 
@@ -697,8 +699,8 @@ We need to know what our system is doing, especially if it is fully automated. H
 The [supplied crontab](/sysproduction/linux/crontab) contains lines like this:
 
 ```
-SCRIPT_PATH="$HOME:/workspace3/psystemtrade/sysproduction/linux/scripts"
-ECHO_PATH="$HOME:/echos"
+SCRIPT_PATH="$HOME/pysystemtrade/sysproduction/linux/scripts"
+ECHO_PATH="$HOME/echos"
 #
 0 6  * * 1-5 $SCRIPT_PATH/updatefxprices  >> $ECHO_PATH/updatefxprices.txt 2>&1
 ```
@@ -2629,9 +2631,19 @@ Because I use cron myself, there are is a [cron tab included in pysystemtrade](h
 
 Useful things to note about the crontab:
 
+- Every line begins with `. $HOME/.profile;`, which sources your profile (so that `$SCRIPT_PATH`, `$ECHO_PATH` and the other variables are defined) before running the script. The leading dot matters: running `$HOME/.profile` as a command would run it in a subshell, and nothing it exported would be visible to the rest of the line.
 - We start the stack handler and capital update processes. These run 'all day' (you can envisage a situation in which other processes also run all day, if you are running certain kinds of intraday system). They will actually start and then stop when the process configuration (in YAML) tells them to.
 - We then start a bunch of 'once a day' processes: `run_daily_price_updates`, `run_systems`, `run_strategy_order_generator`, `run_cleaners`, `run_backups`, `run_reports`. They are started in the sequence they will run, but their behaviour will actually be governed by the process configuration in YAML (below)
 - On startup, we start a MongoDB instance, and run the [startup script](#start-up-script)
+
+#### Scheduling on macOS
+
+cron is deprecated on macOS, and `@reboot` entries do not fire reliably there, so the supplied crontab isn't a good fit. Use launchd instead:
+
+- Put a `.plist` in `~/Library/LaunchAgents/`, with `ProgramArguments` pointing at the `run_*` wrapper script and `StartCalendarInterval` giving the schedule (add `RunAtLoad` for start-up work).
+- launchd jobs do not read your shell profile (`~/.profile` / `~/.zshrc`). Either source it inside the job, or use absolute paths in the script - the latter is more robust for a machine that reboots unattended.
+- Set `LimitLoadToSessionType` to `Aqua` if the job needs the logged-in GUI session (for example to reach a desktop IB Gateway).
+- MongoDB is normally installed as a launchd service rather than started from cron, so the `@reboot` line in the supplied crontab is usually not needed.
 
 #### Process configuration
 

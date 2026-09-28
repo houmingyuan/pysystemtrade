@@ -273,10 +273,13 @@ python -c "from sysproduction.interactive_diagnostics import interactive_diagnos
 ## 6. 踩过的坑（排查清单）
 
 1. **配置层级写错**：`private_config.yaml` 里只有**顶层键**会被 `production_config` 读到。
-   写进 `config:` 块里的键（`GMT_offset_hours`、`ignore_instruments`、`control`、`start_date`）
-   都不生效——只有我们自己的脚本（如 `sysinit/henrik/spotfx_from_ib_to_db.py` 读 `config.fx_data`）
-   会显式去读这个块。另外「忽略品种」的正确键名是 **`exclude_instrument_lists`**
+   2026-09-28 起已把 `private_config.yaml` 的 `config:` 嵌套块拆掉：`fx_data` 以及存储/备份
+   路径（`parquet_store`、`echo_directory`、`mongo_dump_directory`、`csv_backup_directory`、
+   `offsystem_backup_directory`）都提到顶层；原本写在 `config:` 下、提到顶层会改变生产回测
+   口径的三个键（`start_date`、`volatility_calculation`、`ignore_instruments`）保留为注释，
+   需要时再显式启用。另外「忽略品种」的正确键名是 **`exclude_instrument_lists`**
    （`sysdata/config/instruments.py`），不是 `ignore_instruments`。
+   `sysinit/henrik/spotfx_from_ib_to_db.py` 现在读的是顶层 `fx_data`。
 2. **窗口口径**：新写法是「交易所时区 + 交易所当地时间」，由代码换算（推荐）；
    旧写法直接给本机时间，不带 `timezone`。两种写法混用时容易搞混——
    本仓库已统一改成新写法。旧配置里从伦敦口径手工搬过来的值（如把 `01:00–06:00`

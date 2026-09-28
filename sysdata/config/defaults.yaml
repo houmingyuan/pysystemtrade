@@ -35,7 +35,7 @@ offsystem_backup_options: '-av'
 #
 # Interactive brokers
 ib_ipaddress: 127.0.0.1
-ib_port: 4002
+ib_port: 4001
 ib_idoffset: 100
 #
 # Broker class list resolution function
@@ -49,7 +49,7 @@ mongo_db: 'production'
 mongo_port: 27017
 #
 # Parquet store
-parquet_store: '/Users/henrik/data/parquet'
+parquet_store: '/home/me/data/parquet'
 #
 # Needs to be consistent with what you are using in crontab
 echo_extension: '.txt'

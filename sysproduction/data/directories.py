@@ -57,7 +57,7 @@ def get_statefile_backup_directory():
 
 def get_echo_file_directory():
     ans = production_config.get_element("echo_directory")
-    return ans
+    return get_resolved_pathname(ans)
 
 
 def get_echo_extension():

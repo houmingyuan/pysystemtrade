@@ -3,7 +3,7 @@ from sysbrokers.IB.ib_connection import connectionIB
 from sysbrokers.IB.ib_Fx_prices_data import ibFxPricesData
 from sysdata.sim.db_futures_sim_data import dbFuturesSimData
 from sysdata.csv.csv_spot_fx import csvFxPricesData
-from sysdata.config.private_config import get_private_config_as_dict
+from sysdata.config.production_config import get_production_config
 
 def spotfx_from_csv_to_db():
     csv_fx_prices = csvFxPricesData()
@@ -22,7 +22,8 @@ if __name__ == "__main__":
     data=dbFuturesSimData()
     db_fx_prices_data = data.db_fx_prices_data
     
-    account =get_private_config_as_dict()["config"]["broker"]["account"]
+    # 顶层键才是交易路径用的账户（框架只读 private_config 的顶层键）
+    account = get_production_config().get_element("broker_account")
 
     conn = connectionIB(688, account=account)
     ib_fx_prices_data = ibFxPricesData(conn, dataBlob())
