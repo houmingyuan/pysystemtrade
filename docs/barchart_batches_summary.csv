@@ -1,0 +1,3 @@
+batch,instruments,first,last,classes
+2,250,CANNABIS_small,BRENT,"Ags,Bond,Equity,FX,Metals,OilGas"
+3,25,COAL,VOLQ,"OilGas,Other,STIR,Vol"
