@@ -1,3 +1,4 @@
+import os
 from collections import namedtuple
 from copy import copy
 
@@ -118,6 +119,10 @@ def get_config_for_price_filtering(
         ignore_zero_prices = production_config.get_element("ignore_zero_prices")
         ignore_negative_prices = production_config.get_element("ignore_negative_prices")
         max_price_spike = production_config.get_element("max_price_spike")
+        # 中断补数场景（FIR-219）：上次数据距今多日时，等效日变化仍可能超过常态阈值，
+        # 允许日更脚本通过环境变量临时放宽（跑完即失效，不需要改配置文件）。
+        if os.environ.get("PYSYS_MAX_PRICE_SPIKE"):
+            max_price_spike = float(os.environ["PYSYS_MAX_PRICE_SPIKE"])
     except missingData as e:
         error = "Missing config items for price filtering - have you deleted from defaults.yaml?"
         data.log.critical(error)

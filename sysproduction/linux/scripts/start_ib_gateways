@@ -1,7 +1,7 @@
 #!/bin/zsh
 # 启动两个 IB Gateway 实例（macOS）：
-#   纸面实例：/Users/henrik/Applications/IB Gateway 10.45/          设置目录 ~/Jts        API 4002（交易 + 期货数据）
-#   实盘实例：/Users/henrik/Applications/IB Gateway 10.45 live/     设置目录 ~/Jts-live   API 4001（spot FX 取数）
+#   纸面实例：/Users/henrik/Applications/IB Gateway 10.50/          设置目录 ~/Jts        API 4002（交易 + 期货数据）
+#   实盘实例：/Users/henrik/Applications/IB Gateway 10.50 live/     设置目录 ~/Jts-live   API 4001（spot FX 取数）
 #
 # 前提：实盘副本的 ibgateway.vmoptions 里必须有
 #         -DjtsConfigDir=/Users/henrik/Jts-live
@@ -16,8 +16,8 @@
 
 set -u
 
-PAPER_APP="/Users/henrik/Applications/IB Gateway 10.45/IB Gateway 10.45.app"
-LIVE_APP="/Users/henrik/Applications/IB Gateway 10.45 live/IB Gateway 10.45.app"
+PAPER_APP="/Users/henrik/Applications/IB Gateway 10.50/IB Gateway 10.50.app"
+LIVE_APP="/Users/henrik/Applications/IB Gateway 10.50 live/IB Gateway 10.50.app"
 LIVE_SETTINGS="/Users/henrik/Jts-live"
 
 port_listening() {

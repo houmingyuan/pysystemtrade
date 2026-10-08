@@ -78,7 +78,14 @@ def calendar_rows_from_volume(instrument_code: str, min_date: str) -> pd.DataFra
         if candidate <= held:
             continue
         rows.append(
-            (date, held, candidate, carry_contract_for_held(held, roll_parameters))
+            (
+                date,
+                held,
+                candidate,
+                carry_contract_for_held(
+                    held, roll_parameters, available=set(volumes.columns)
+                ),
+            )
         )
         held = candidate
 
@@ -92,24 +99,42 @@ def calendar_rows_from_volume(instrument_code: str, min_date: str) -> pd.DataFra
     return calendar
 
 
-def carry_contract_for_held(held_contract: int, roll_parameters) -> int:
+def carry_contract_for_held(held_contract: int, roll_parameters, available=None) -> int:
     """
     carry 合约由 rollconfig 的 CarryOffset 决定（复用 contractDateWithRollParameters）。
 
     推不出来时（rollconfig 到不了、合约不在 rollcycle 里）退回「换月前持有」并告警，
     不让整个重建失败。
+
+    另外：季度挂牌品种（如 COPPER-micro、NIKKEI）按 CarryOffset 推出的月份可能根本
+    没有挂牌，此时取价格库里最接近的合约月份，避免 multiple prices 报
+    「Missing contract ... in middle of roll calendar」。
     """
     try:
         held = contractDateWithRollParameters(
             contractDate(str(held_contract)), roll_parameters
         )
-        return int(held.carry_contract().date_str)
+        carry_contract = int(held.carry_contract().date_str)
     except Exception as error:
         print(
             "  WARN: 合约 %s 无法按 rollconfig 推导 carry（%s: %s），退回换月前持有"
             % (held_contract, type(error).__name__, error)
         )
-        return int(held_contract)
+        carry_contract = int(held_contract)
+
+    if available and carry_contract not in available:
+        # 优先吸附到「当前持有」合约：季度挂牌品种按 CarryOffset 推出来的月份通常
+        # 根本没有挂牌（如 COPPER-micro、NIKKEI、OMX），若吸附到 next 会出现
+        # current/next/carry 同一月份的错误语义。
+        if held_contract in available:
+            carry_contract = int(held_contract)
+        else:
+            carry_contract = min(
+                available,
+                key=lambda contract: (abs(contract - carry_contract), contract),
+            )
+
+    return carry_contract
 
 
 def check_chain(calendar: pd.DataFrame) -> list:

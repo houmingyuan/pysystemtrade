@@ -100,12 +100,18 @@ def stale_multiple_prices(diag_prices, instrument_codes, max_stale_days: int):
 
     multiple prices 末端落后合约价格末端超过 max_stale_days 天，说明构建没跟上
     （常见原因：换月日历陈旧、单品种构建抛错被容错版跳过）。
+
+    落后天数按**该品种自己的交易日历**计算：只统计「合约价格有数据、multiple prices
+    没有」的交易日，休市日（周末 + 历史同月日从未有价格的日期）不计入。
+    这样中国春节/国庆、圣诞新年这类长假不会误报。
     """
     stale = []
     for instrument_code in instrument_codes:
         try:
             multiple_last = _last_multiple_prices_date(diag_prices, instrument_code)
-            contract_last = _last_contract_price_date(diag_prices, instrument_code)
+            contract_last, calendar = _contract_price_calendar(
+                diag_prices, instrument_code
+            )
         except Exception as error:
             stale.append(
                 (
@@ -120,10 +126,90 @@ def stale_multiple_prices(diag_prices, instrument_codes, max_stale_days: int):
         if multiple_last is None or contract_last is None:
             continue
 
-        if multiple_last < contract_last - pd.Timedelta(days=max_stale_days):
-            stale.append((instrument_code, multiple_last, contract_last, "末端落后"))
+        missing_trading_days = _missing_trading_days(
+            multiple_last, contract_last, calendar
+        )
+        if missing_trading_days > max_stale_days:
+            stale.append(
+                (
+                    instrument_code,
+                    multiple_last,
+                    contract_last,
+                    "末端落后 %d 个交易日" % missing_trading_days,
+                )
+            )
 
     return stale
+
+
+def _contract_price_calendar(diag_prices, instrument_code: str):
+    """
+    返回 (合约价格最后日期, 该品种过去两年出现过的所有交易日)。
+
+    交易日历直接由价格数据本身推导：某天有合约价格，就算该品种当天在交易。
+    """
+    merged = (
+        diag_prices.db_futures_contract_price_data.get_merged_prices_for_instrument(
+            instrument_code
+        )
+    )
+    latest = None
+    trading_dates = set()
+    for series in merged.final_prices().values():
+        index = pd.DatetimeIndex(series.index).normalize()
+        if len(index) == 0:
+            continue
+        trading_dates.update(index.tolist())
+        candidate = index.max()
+        if pd.isna(candidate):
+            continue
+        if latest is None or candidate > latest:
+            latest = candidate
+
+    if latest is None:
+        return None, pd.DatetimeIndex([])
+
+    cutoff = latest - pd.DateOffset(years=2)
+    calendar = pd.DatetimeIndex(sorted(d for d in trading_dates if d >= cutoff))
+
+    return pd.Timestamp(latest), calendar
+
+
+def _projected_holidays(calendar: pd.DatetimeIndex) -> set:
+    """
+    从历史交易日历推出休市日：过去两年里「工作日但没有价格」的日期，
+    按 (月, 日) 投影到今年（应对固定日期假期：国庆、圣诞新年等）。
+
+    注：春节/复活节这类浮动假期无法用月日投影，会退化为按普通工作日计算，
+    可能仍报 1–2 天误差（可用 DATA_CHECK_MAX_STALE_DAYS 放宽）。
+    """
+    if len(calendar) == 0:
+        return set()
+
+    trading_days = {d.date() for d in calendar}
+    start, end = calendar[0].date(), calendar[-1].date()
+    holidays = set()
+    day = start
+    while day <= end:
+        if day.weekday() < 5 and day not in trading_days:
+            holidays.add((day.month, day.day))
+        day += pd.Timedelta(days=1)
+
+    return holidays
+
+
+def _missing_trading_days(multiple_last, contract_last, calendar: pd.DatetimeIndex) -> int:
+    """统计 (multiple_last, contract_last] 之间该品种真正该有价格、但 multiple 缺失的天数。"""
+    if contract_last <= multiple_last:
+        return 0
+
+    holidays = _projected_holidays(calendar)
+    business_days = pd.date_range(
+        multiple_last.normalize() + pd.Timedelta(days=1),
+        contract_last.normalize(),
+        freq="B",
+    )
+    return sum(1 for day in business_days if (day.month, day.day) not in holidays)
 
 
 def _last_multiple_prices_date(diag_prices, instrument_code: str):

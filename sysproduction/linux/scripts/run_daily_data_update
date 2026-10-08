@@ -46,6 +46,14 @@ VOLUME_CHECK_INTERVAL=30
 UPDATE_FUTURES=true
 UPDATE_FX=true
 
+# ---------- IB 端口（前置检查用，见 FIR-219） ----------
+IB_PORT_FUTURES=4002           # 纸面：期货合约价格
+IB_PORT_FX=4001                # 实盘：spot FX 行情
+
+port_listening() {
+    lsof -nP -iTCP:"$1" -sTCP:LISTEN >/dev/null 2>&1
+}
+
 # ---------- 数据面校验阈值 ----------
 DATA_CHECK_MAX_SPIKES=${DATA_CHECK_MAX_SPIKES:-0}
 DATA_CHECK_MAX_STALE_DAYS=${DATA_CHECK_MAX_STALE_DAYS:-7}
@@ -132,17 +140,56 @@ run_step() {
 
 # ---------- 期货链路：IB 合约价格 -> multiple -> adjusted ----------
 if [ "$UPDATE_FUTURES" = true ]; then
+    # IB Gateway 未启动/未登录时，上游各环节会各自报错（采样表为空、价格空转、退出码却可能是 0），
+    # 历史上（2026-10-01~10-06）就是这样静默停摆的。这里做一次显式前置检查。
+    if ! port_listening "$IB_PORT_FUTURES"; then
+        log "ERROR" "IB 期货 API 端口 $IB_PORT_FUTURES 未监听（Gateway 未启动或未登录），跳过期货链路"
+        exit 2
+    fi
     run_step "采样合约" "$PY" -u -m sysproduction.run_daily_contract_sampling
+    # 中断补数（FIR-219）：上一次数据距今 >2 天时，等效日变化可能超过常态尖峰阈值，
+    # 临时放宽到 8*sqrt(间隔天数)，仅本次运行生效（cleaner 读 PYSYS_MAX_PRICE_SPIKE）。
+    LAST_PRICE_DATE=$("$PY" - <<'PYEOF' 2>/dev/null || echo ""
+import pandas as pd
+path = "/Users/henrik/data/parquet/futures_adjusted_prices/CORN.parquet"
+print(pd.read_parquet(path).index[-1].date())
+PYEOF
+)
+    if [ -n "$LAST_PRICE_DATE" ]; then
+        GAP_DAYS=$("$PY" - "$LAST_PRICE_DATE" <<'PYEOF' 2>/dev/null || echo "0"
+import sys, pandas as pd
+last = pd.Timestamp(sys.argv[1])
+print(max(0, (pd.Timestamp.today().normalize() - last).days))
+PYEOF
+)
+        if [ "${GAP_DAYS:-0}" -gt 2 ]; then
+            export PYSYS_MAX_PRICE_SPIKE=$("$PY" - "$GAP_DAYS" <<'PYEOF'
+import sys, math
+gap = max(1, int(sys.argv[1]))
+print(round(8.0 * math.sqrt(gap), 1))
+PYEOF
+)
+            log "WARN" "检测到数据缺口 ${GAP_DAYS} 天，本次价格更新临时放宽尖峰阈值至 ${PYSYS_MAX_PRICE_SPIKE}"
+        fi
+    fi
     run_step "IB 期货合约价格" "$PY" -u -m sysproduction.update_historical_prices
     # 容错版：逐品种 try/except，单品种失败不中断整轮（上游版本会整体中止）
     run_step "multiple prices" "$PY" -u "$PST_DIR/sysinit/henrik/update_multiple_prices_tolerant.py" --allow-failures
     run_step "adjusted prices" "$PY" -u "$PST_DIR/sysinit/henrik/update_adjusted_prices_tolerant.py" --allow-failures
+    # 失滚品种自动重建（FIR-219/220）：前端合约到期后换月日历未滚动会让 multiple prices 停住，
+    # 这里按「合约价格新、链条落后」自动重建日历 + multiple + adjusted。
+    run_step "失滚品种重建" "$PY" -u "$PST_DIR/sysinit/henrik/rebuild_stalled_instruments.py"
 fi
 
 # ---------- 汇率：IB ----------
 if [ "$UPDATE_FX" = true ]; then
     # spot FX 行情权限属于实盘账户（FIR-158 实测），所以使用读取顶层 fx_data 的本地脚本
+    if ! port_listening "$IB_PORT_FX"; then
+        log "ERROR" "IB 实盘 API 端口 $IB_PORT_FX 未监听（Gateway 未启动或未登录），跳过汇率链路"
+        FAILED_STEPS+=("IB 汇率(端口未监听)")
+    else
     run_step "IB 汇率" "$PY" -u "$PST_DIR/sysinit/henrik/spotfx_from_ib_to_db.py"
+    fi
 fi
 
 # ---------- 数据面校验：数据真的推进了吗 ----------
