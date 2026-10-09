@@ -262,6 +262,13 @@ def get_average_half_spread_from_sampling(data, start_date, end_date):
 
     spreads_as_df = pd.DataFrame(spreads_and_counts_as_list, index=list_of_instruments)
 
+    if "average_half_spread" not in spreads_as_df.columns:
+        # No instrument has sampled spread data (eg early in the life of the
+        # system): return empty series rather than an empty frame without the
+        # expected columns.
+        empty_series = pd.Series(dtype="float64")
+        return empty_series, empty_series
+
     return spreads_as_df.average_half_spread, spreads_as_df.count_of_spreads
 
 

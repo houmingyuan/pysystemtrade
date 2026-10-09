@@ -100,6 +100,7 @@ class csvRollParametersData(rollParametersData):
             instrument_code, roll_parameters
         )
         all_parameters.write_to_file(self.config_file)
+        self._invalidate_cached_parameters()
 
         self.log.warning(
             "*** WRITTEN NEW ROLL PARAMETERS TO %s - copy to /data/futures/csvconfig/rollconfig.csv NOW ***"
@@ -109,9 +110,20 @@ class csvRollParametersData(rollParametersData):
     def write_all_roll_parameters_data(self, roll_parameters_df: pd.DataFrame):
         all_roll_parameters = allRollParameters(roll_parameters_df)
         all_roll_parameters.write_to_file(self.config_file)
+        self._invalidate_cached_parameters()
 
     def get_roll_parameters_all_instruments(self) -> allRollParameters:
-        return allRollParameters.read_from_file(self.config_file)
+        ## read once per instance: otherwise the whole file is re-read on
+        ## every single instrument lookup
+        all_parameters = getattr(self, "_all_parameters", None)
+        if all_parameters is None:
+            all_parameters = allRollParameters.read_from_file(self.config_file)
+            self._all_parameters = all_parameters
+
+        return all_parameters
+
+    def _invalidate_cached_parameters(self):
+        self._all_parameters = None
 
     @property
     def config_file(self):

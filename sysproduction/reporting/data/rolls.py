@@ -72,6 +72,31 @@ def get_roll_data_for_instrument(instrument_code, data):
     return results_dict_code
 
 
+def error_roll_data_for_instrument(instrument_code, exception) -> dict:
+    """
+    Placeholder roll data for an instrument whose contract data cannot be used.
+
+    Keeps the roll table rendering (with an explanatory status) when a single
+    instrument has stale or missing contract data, instead of failing the whole
+    report.
+
+    :param instrument_code: str
+    :param exception: Exception
+    :return: dict
+    """
+    return dict(
+        status="Data error (%s)" % type(exception).__name__,
+        roll_expiry=np.nan,
+        price_expiry=np.nan,
+        carry_expiry=np.nan,
+        contract_priced="",
+        contract_fwd="",
+        position_priced=np.nan,
+        relative_volume_fwd=np.nan,
+        contract_volume_fwd=0,
+    )
+
+
 def relative_volume_in_forward_contract_versus_price(
     data: dataBlob, instrument_code: str
 ) -> float:

@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css?family=Open+Sans:400,600,700');
+/* Fonts are taken from the local system stack (no external CDN dependency). */
 * {
   margin: 0;
   padding: 0;
@@ -7,10 +7,28 @@ body {
   padding: 50px;
   background: #E5E4E2;
 }
+#dashboard_status {
+  font-family: "Open Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    Helvetica, Arial, sans-serif;
+  font-size: 13px;
+  color: #555;
+  margin-bottom: 12px;
+  display: flex;
+  gap: 16px;
+  align-items: center;
+}
+#dashboard_message {
+  color: #b00020;
+  font-weight: 600;
+}
+#dashboard_message.hidden {
+  display: none;
+}
 .tabinator {
   background: #fff;
   padding: 40px;
-  font-family: Open Sans;
+  font-family: "Open Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    Helvetica, Arial, sans-serif;
 }
 .tabinator h2 {
   text-align: center;

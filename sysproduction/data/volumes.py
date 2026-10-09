@@ -63,6 +63,18 @@ class diagVolumes(productionDataLayerGeneric):
     def get_smoothed_volume_for_contract(
         self, instrument_code: str, contract_date_str: str
     ) -> float:
+        ## called repeatedly for the same contract; each call otherwise
+        ## re-reads contract prices from disk
+        return self.read_through(
+            ("smoothed_volume", instrument_code, contract_date_str),
+            lambda: self._get_smoothed_volume_for_contract_from_data(
+                instrument_code, contract_date_str
+            ),
+        )
+
+    def _get_smoothed_volume_for_contract_from_data(
+        self, instrument_code: str, contract_date_str: str
+    ) -> float:
         contract = futuresContract(instrument_code, contract_date_str)
         try:
             volumes = self.get_daily_volumes_for_contract(contract)

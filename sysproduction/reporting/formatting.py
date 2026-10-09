@@ -120,6 +120,9 @@ def nice_format_liquidity_table(liquidity_table: pd.DataFrame) -> pd.DataFrame:
 def nice_format_instrument_risk_table(
     instrument_risk_data: pd.DataFrame,
 ) -> pd.DataFrame:
+    if instrument_risk_data.empty:
+        return instrument_risk_data
+
     instrument_risk_data.daily_price_stdev = (
         instrument_risk_data.daily_price_stdev.round(3)
     )

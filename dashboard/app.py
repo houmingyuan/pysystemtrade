@@ -27,6 +27,7 @@ from sysproduction.reporting.data.rolls import rollingAdjustedAndMultiplePrices
 
 import asyncio
 import json
+import os
 import pandas as pd
 
 app = Flask(__name__)
@@ -35,6 +36,10 @@ app = Flask(__name__)
 def get_data():
     if not hasattr(g, "data"):
         g.data = dataBlob(log_name="dashboard")
+        # A blob lives for a single request, so caching repeated reads cannot
+        # serve stale data across requests; it just stops the slower reports
+        # (eg rolls) reading the same files over and over.
+        g.data.enable_read_cache()
     return g.data
 
 
@@ -66,7 +71,7 @@ def dict_of_df_to_dict(d, orient):
 
 @app.route("/")
 def index():
-    return render_template("index.html")
+    return render_template("index.html", refresh_ms=dashboard_refresh_ms())
 
 
 @app.route("/capital")
@@ -189,8 +194,18 @@ def rolls():
     report = json.loads(rolls.to_json(orient="index"))
 
     for instrument in rolls.index:
-        allowable = setup_roll_data_with_state_reporting(data, instrument)
-        report[instrument]["allowable"] = allowable.allowable_roll_states_as_list_of_str
+        try:
+            allowable = setup_roll_data_with_state_reporting(data, instrument)
+            report[instrument][
+                "allowable"
+            ] = allowable.allowable_roll_states_as_list_of_str
+        except Exception as e:
+            # A single instrument with stale or missing contract data should not
+            # take out the whole roll view; show it with no roll options.
+            data.log.warning(
+                "Couldn't get allowable roll states for %s: %s" % (instrument, e)
+            )
+            report[instrument]["allowable"] = []
 
     return report
 
@@ -311,8 +326,51 @@ def visible_on_lan() -> bool:
     return visible
 
 
+DEFAULT_REFRESH_SECONDS = 60
+
+
+def dashboard_refresh_ms() -> int:
+    """
+    Auto refresh interval for the dashboard, in milliseconds.
+
+    Read from private_control_config.yaml as 'dashboard_refresh_seconds'
+    (default 60). A value of zero or less disables auto refresh.
+    """
+    config = get_control_config()
+    seconds = config.get_element_or_default(
+        "dashboard_refresh_seconds", DEFAULT_REFRESH_SECONDS
+    )
+    try:
+        seconds = int(seconds)
+    except (TypeError, ValueError):
+        seconds = DEFAULT_REFRESH_SECONDS
+
+    return max(seconds, 0) * 1000
+
+
+def dashboard_port() -> int:
+    """
+    Port the dashboard listens on.
+
+    Defaults to 5000 but can be overridden with the DASHBOARD_PORT environment
+    variable; on macos port 5000 is often taken by AirPlay Receiver.
+    """
+    default_port = 5000
+    port_as_str = os.environ.get("DASHBOARD_PORT", str(default_port))
+    try:
+        return int(port_as_str)
+    except (TypeError, ValueError):
+        data = dataBlob()
+        data.log.warning(
+            "Invalid DASHBOARD_PORT '%s', falling back to %d"
+            % (port_as_str, default_port)
+        )
+        return default_port
+
+
 if __name__ == "__main__":
     visible = visible_on_lan()
+    port = dashboard_port()
     if visible:
         data = dataBlob()
         data.log.warning(
@@ -324,6 +382,7 @@ if __name__ == "__main__":
             use_reloader=False,
             passthrough_errors=True,
             host="0.0.0.0",
+            port=port,
         )
 
     else:
@@ -332,4 +391,5 @@ if __name__ == "__main__":
             use_debugger=False,
             use_reloader=False,
             passthrough_errors=True,
+            port=port,
         )

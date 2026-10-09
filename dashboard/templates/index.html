@@ -3,10 +3,16 @@
 <head>
   <link rel="stylesheet" href="static/css/styles.css">
   <link rel="shortcut icon" href="static/favicon.ico">
-  <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+  <script src="static/js/jquery-3.5.1.min.js"></script>
+  <script>window.DASHBOARD_REFRESH_MS = {{ refresh_ms }};</script>
   <script src="static/js/update.js"></script>
 </head>
 <body>
+
+<div id="dashboard_status">
+  <span id="last_updated">Loading...</span>
+  <span id="dashboard_message" class="hidden"></span>
+</div>
 
 <div id="traffic_lights_div">
   <button id="capital-tl" class="traffic-light" onclick="getElementById('tab_pandl').checked = true; update_capital()">12345</button>
@@ -141,6 +147,8 @@
         <th>Generated</th><th>Submitted</th><th>Filled</th>
         <th>Submission Delay</th><th>Fill Delay</th>
       </tr></thead>
+    <tbody></tbody>
+  </table>
   <br>
   <table id="trades_slippage_table">
     <caption>Raw Slippage</caption>
@@ -152,6 +160,7 @@
         <th>Delay</th><th>Bid/Ask</th><th>Execution</th>
         <th>vs Limit</th><th>vs Parent Limit</th><th>Total Trading</th>
       </tr></thead>
+    <tbody></tbody>
   </table>
   <br>
   <table id="trades_vol_slippage_table">
@@ -162,6 +171,7 @@
         <th>Execution</th><th>vs Limit Vol</th>
         <th>vs Parent Limit</th><th>Total Trading</th>
       </tr></thead>
+    <tbody></tbody>
   </table>
   <br>
   <table id="trades_cash_slippage_table">

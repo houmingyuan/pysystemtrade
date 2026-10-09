@@ -159,6 +159,16 @@ class dataContracts(productionDataLayerGeneric):
         return ans_as_dict
 
     def get_current_contract_dict(self, instrument_code) -> setOfNamedContracts:
+        ## called repeatedly for the same instrument (priced, forward, carry,
+        ## expiries); each call otherwise re-reads multiple prices from disk
+        return self.read_through(
+            ("current_contract_dict", instrument_code),
+            lambda: self._get_current_contract_dict_from_data(instrument_code),
+        )
+
+    def _get_current_contract_dict_from_data(
+        self, instrument_code
+    ) -> setOfNamedContracts:
         multiple_prices = self.db_multiple_prices_data.get_multiple_prices(
             instrument_code
         )

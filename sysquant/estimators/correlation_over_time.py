@@ -1,9 +1,10 @@
 import pandas as pd
+import numpy as np
 from syscore.interactive.progress_bar import progressBar
 from sysquant.estimators.correlation_estimator import correlationEstimator
 
-from sysquant.fitting_dates import generate_fitting_dates
-from sysquant.estimators.correlations import CorrelationList
+from sysquant.fitting_dates import generate_fitting_dates, listOfFittingDates
+from sysquant.estimators.correlations import CorrelationList, correlationEstimate
 
 
 def correlation_over_time_for_returns(
@@ -12,6 +13,12 @@ def correlation_over_time_for_returns(
     forward_fill_price_index=True,
     **kwargs,
 ) -> CorrelationList:
+    if returns_for_correlation.shape[1] == 0:
+        # Nothing to correlate (eg no instruments with positions yet). Return
+        # an empty correlation list instead of trying to resample an index that
+        # is not a datetime index (which happens for an empty frame).
+        return empty_correlation_list()
+
     index_prices_for_correlation = returns_for_correlation.cumsum()
     if forward_fill_price_index:
         index_prices_for_correlation = index_prices_for_correlation.ffill()
@@ -24,6 +31,16 @@ def correlation_over_time_for_returns(
     correlation_list = correlation_over_time(returns_for_correlation, **kwargs)
 
     return correlation_list
+
+
+def empty_correlation_list() -> CorrelationList:
+    empty_estimate = correlationEstimate(np.empty((0, 0)), columns=[])
+
+    return CorrelationList(
+        corr_list=[empty_estimate],
+        column_names=[],
+        fit_dates=listOfFittingDates(),
+    )
 
 
 def correlation_over_time(

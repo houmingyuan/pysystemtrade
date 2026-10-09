@@ -65,6 +65,7 @@ class csvFuturesInstrumentData(futuresInstrumentData):
             index_label="Instrument",
             columns=[field for field in META_FIELD_LIST],
         )
+        self._instrument_df = None
 
     def get_all_instrument_data_as_df(self) -> pd.DataFrame:
         """
@@ -95,7 +96,7 @@ class csvFuturesInstrumentData(futuresInstrumentData):
         except BaseException:
             raise Exception("Badly configured file %s" % (self._config_file))
 
-        self._config_data = config_data
+        self._instrument_df = config_data
 
         return config_data
 

@@ -64,6 +64,7 @@ class dataBlob(object):
         self._parquet_store_path = parquet_store_path
 
         self._attr_list = []
+        self._read_cache = None
 
         if class_list is arg_not_supplied:
             # can set up dynamically later
@@ -75,6 +76,22 @@ class dataBlob(object):
 
     def __repr__(self):
         return "dataBlob with elements: %s" % ",".join(self._attr_list)
+
+    def enable_read_cache(self):
+        """
+        Turn on a simple read through cache for this data blob.
+
+        Intended for short lived, read only blobs (for example a single web
+        dashboard request) where the same underlying data would otherwise be
+        read from disk many times. Writes are not tracked, so do not enable
+        this on a blob that writes data and then reads it back expecting the
+        write to be visible.
+        """
+        self._read_cache = {}
+
+    @property
+    def read_cache(self):
+        return self._read_cache
 
     def add_class_list(self, class_list: list, use_prefix: str = arg_not_supplied):
         for class_object in class_list:

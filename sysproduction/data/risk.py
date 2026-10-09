@@ -236,7 +236,9 @@ def get_daily_price_series_for_risk(data, instrument_code):
     if len(price_series) == 0:
         return price_series
 
-    daily_prices = resample_prices_to_business_day_index(price_series)
+    daily_prices = resample_prices_to_business_day_index(
+        _recent_price_history(price_series)
+    )
 
     return daily_prices[-DAILY_RISK_CALC_LOOKBACK:]
 
@@ -246,9 +248,26 @@ def get_daily_current_price_series_for_risk(data, instrument_code):
     if len(price_series) == 0:
         return price_series
 
-    daily_prices = price_series.resample("1B").last()
+    daily_prices = _recent_price_history(price_series).resample("1B").last()
 
     return daily_prices[-DAILY_RISK_CALC_LOOKBACK:]
+
+
+## Only the most recent DAILY_RISK_CALC_LOOKBACK business days are ever used, so
+## truncate the history before resampling. Resampling many years of prices just
+## to discard nearly all of the result is very slow.
+RISK_CALC_CALENDAR_MARGIN_FACTOR = 1.7
+
+
+def _recent_price_history(price_series: pd.Series) -> pd.Series:
+    if len(price_series) == 0:
+        return price_series
+
+    last_date = price_series.index[-1]
+    calendar_days = int(DAILY_RISK_CALC_LOOKBACK * RISK_CALC_CALENDAR_MARGIN_FACTOR)
+    cutoff = last_date - pd.Timedelta(days=calendar_days)
+
+    return price_series[cutoff:]
 
 
 DAILY_RISK_CALC_LOOKBACK = int(BUSINESS_DAYS_IN_YEAR * 2)

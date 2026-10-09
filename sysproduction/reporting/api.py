@@ -75,6 +75,7 @@ from sysproduction.reporting.data.risk import (
 )
 from sysproduction.reporting.data.rolls import (
     get_roll_data_for_instrument,
+    error_roll_data_for_instrument,
 )
 from sysproduction.reporting.data.status import (
     get_all_overrides_as_df,
@@ -649,7 +650,13 @@ class reportingApi(object):
 
         roll_data_dict = {}
         for instrument_code in list_of_instruments:
-            roll_data = get_roll_data_for_instrument(instrument_code, data)
+            try:
+                roll_data = get_roll_data_for_instrument(instrument_code, data)
+            except Exception as e:
+                data.log.warning(
+                    "Couldn't get roll data for %s: %s" % (instrument_code, e)
+                )
+                roll_data = error_roll_data_for_instrument(instrument_code, e)
             roll_data_dict[instrument_code] = roll_data
 
         return roll_data_dict

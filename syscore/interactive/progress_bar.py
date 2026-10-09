@@ -30,10 +30,19 @@ class progressBar(object):
         self._current_iteration = 0
         self._suffix = suffix
         self._range_to_iterate_over = range_to_iterate_over
-        self._range_per_block = range_to_iterate_over / float(toolbar_width)
-        self._how_many_blocks_displayed = -1  # will always display first time
         self._show_each_time = show_each_time
         self._show_timings = show_timings
+
+        if range_to_iterate_over <= 0:
+            # Nothing to iterate over: disable the bar so that displaying it
+            # (which divides by the range) cannot raise a ZeroDivisionError.
+            self._disabled = True
+            self._range_per_block = 1
+            self._how_many_blocks_displayed = 0
+        else:
+            self._disabled = False
+            self._range_per_block = range_to_iterate_over / float(toolbar_width)
+            self._how_many_blocks_displayed = -1  # will always display first time
 
         self._display_bar()
 
@@ -64,6 +73,9 @@ class progressBar(object):
         self.current_estimate_of_times = current_estimate
 
     def _display_bar(self):
+        if self._disabled:
+            return None
+
         ## only show the bar if the number of blocks has changed, or we are showing every time
         if not (
             self._has_number_of_blocks_changed_since_last_displayed()
@@ -117,6 +129,9 @@ class progressBar(object):
             return False
 
     def close(self):
+        if self._disabled:
+            return None
+
         self._display_bar()
         sys.stdout.write("\n")
 

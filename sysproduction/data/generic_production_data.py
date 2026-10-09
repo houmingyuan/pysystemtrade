@@ -24,5 +24,22 @@ class productionDataLayerGeneric(object):
     def log(self):
         return self.data.log
 
+    def read_through(self, key, calculate):
+        """
+        Return calculate() but memoise the result on the data blob when its
+        read cache is enabled (see dataBlob.enable_read_cache).
+
+        :param key: hashable cache key
+        :param calculate: callable that returns the value if not cached
+        """
+        read_cache = self.data.read_cache
+        if read_cache is None:
+            return calculate()
+
+        if key not in read_cache:
+            read_cache[key] = calculate()
+
+        return read_cache[key]
+
     def _add_required_classes_to_data(self, data) -> dataBlob:
         return data

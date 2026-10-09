@@ -170,6 +170,9 @@ def get_instrument_risk_table(
     p.close()
 
     risk_df = pd.DataFrame(risk_data_list, index=instrument_list).transpose()
+    if risk_df.empty:
+        return risk_df
+
     risk_df = sorted_clean_df(risk_df, "annual_risk_perc_capital")
 
     return risk_df
@@ -504,6 +507,9 @@ def get_correlation_matrix_for_instruments(
 
 
 def cluster_correlation_matrix(cmatrix: correlationEstimate) -> correlationEstimate:
+    if cmatrix.size == 0:
+        return cmatrix
+
     cluster_size = min(5, int(cmatrix.size / 3))
     new_order = assets_in_cluster_order(cmatrix, cluster_size=cluster_size)
     cmatrix = cmatrix.list_in_key_order(new_order)

@@ -200,6 +200,13 @@ class diagPositions(productionDataLayerGeneric):
         return list_of_positions
 
     def get_position_for_contract(self, contract: futuresContract) -> float:
+        ## the same contract position is asked for several times in one report
+        return self.read_through(
+            ("position_for_contract", contract.instrument_code, contract.date_str),
+            lambda: self._get_position_for_contract_from_data(contract),
+        )
+
+    def _get_position_for_contract_from_data(self, contract: futuresContract) -> float:
         position = (
             self.db_contract_position_data.get_current_position_for_contract_object(
                 contract
@@ -317,6 +324,16 @@ class diagPositions(productionDataLayerGeneric):
         return new_contract
 
     def get_all_current_strategy_instrument_positions(
+        self,
+    ) -> listOfInstrumentStrategyPositions:
+        ## each per instrument lookup rebuilds this from scratch, which is
+        ## O(n^2) across a report; memoise it on the blob when enabled
+        return self.read_through(
+            ("all_current_strategy_instrument_positions",),
+            self._get_all_current_strategy_instrument_positions_from_data,
+        )
+
+    def _get_all_current_strategy_instrument_positions_from_data(
         self,
     ) -> listOfInstrumentStrategyPositions:
         list_of_current_positions = (

@@ -1,18 +1,68 @@
+// pysystemtrade dashboard front end.
+//
+// Each tab is refreshed from the Flask JSON endpoints. Auto refresh runs every
+// window.DASHBOARD_REFRESH_MS milliseconds (injected by the template from
+// private_control_config.yaml: dashboard_refresh_seconds); 0 disables it.
+
+var DASHBOARD_REFRESH_MS = (typeof window.DASHBOARD_REFRESH_MS === "number")
+  ? window.DASHBOARD_REFRESH_MS
+  : 60000;
+
+// --- helpers ---------------------------------------------------------------
+
+function clear_rows(selector) {
+  $(selector + " tbody").empty();
+}
+
+function set_traffic_light(selector, colour) {
+  $(selector).removeClass("red orange green").addClass(colour);
+}
+
+function mark_updated() {
+  $("#last_updated").text("Last updated " + new Date().toLocaleTimeString());
+}
+
+function show_dashboard_message(message) {
+  $("#dashboard_message").text(message).removeClass("hidden");
+}
+
+function clear_dashboard_message() {
+  $("#dashboard_message").addClass("hidden").text("");
+}
+
+function display_value(value) {
+  if (value === null || value === undefined) {
+    return "";
+  }
+  if (typeof value === "number" && isNaN(value)) {
+    return "";
+  }
+  return value;
+}
+
+function restore_loading_state(tab_selector) {
+  $(tab_selector + " > div.loading").hide();
+  $(tab_selector + " > table").show();
+}
+
+// --- capital ---------------------------------------------------------------
+
 function update_capital() {
   $.ajax({
     type: "GET",
     url: "/capital",
     success: function(data) {
-      $('#capital-tl').html('$'+data['now'].toLocaleString());
+      $('#capital-tl').html('$' + data['now'].toLocaleString());
       if (data['now'] >= data['yesterday']) {
-        $('#capital-tl').addClass('green');
+        set_traffic_light('#capital-tl', 'green');
       } else {
-        $('#capital-tl').addClass('red');
+        set_traffic_light('#capital-tl', 'red');
       }
     }
-  }
-  );
+  });
 }
+
+// --- costs -----------------------------------------------------------------
 
 function update_costs() {
   $("#costs > div.loading").show();
@@ -21,6 +71,8 @@ function update_costs() {
     type: "GET",
     url: "/costs",
     success: function(data) {
+      clear_rows("#costs_table");
+      clear_rows("#costs_detail_table");
       $.each(data["table_of_SR_costs"], function(instrument, cost) {
         $("#costs_table tbody").append(
           `<tr><td>${instrument}</td><td>${cost["SR_cost"]}</td></tr>`
@@ -43,9 +95,14 @@ function update_costs() {
       });
       $("#costs > div.loading").hide();
       $("#costs > table").show("slow");
+    },
+    error: function() {
+      restore_loading_state("#costs");
     }
   });
 }
+
+// --- forex -----------------------------------------------------------------
 
 function update_forex() {
   $("#forex > div.loading").show();
@@ -54,15 +111,21 @@ function update_forex() {
     type: "GET",
     url: "/forex",
     success: function(data) {
+      clear_rows("#forex_table");
       $.each(data, function(currency, balance) {
         $("#forex_table tbody").append(`<tr><td>${currency}</td><td>${balance}</td></tr>`);
       });
       $("#forex > div.loading").hide();
       $("#forex > table").show("slow");
+    },
+    error: function() {
+      restore_loading_state("#forex");
     }
   }
   );
 }
+
+// --- liquidity -------------------------------------------------------------
 
 function update_liquidity() {
   $("#liquidity > div.loading").show();
@@ -71,6 +134,7 @@ function update_liquidity() {
     type: "GET",
     url: "/liquidity",
     success: function(data) {
+      clear_rows("#liquidity_table");
       $.each(data, function(instrument, vals) {
         var contracts = "";
         var risk = "";
@@ -91,10 +155,15 @@ function update_liquidity() {
       });
       $("#liquidity > div.loading").hide();
       $("#liquidity > table").show("slow");
+    },
+    error: function() {
+      restore_loading_state("#liquidity");
     }
   }
   );
 }
+
+// --- P&L -------------------------------------------------------------------
 
 function update_pandl() {
   $("#pandl > div.loading").show();
@@ -103,6 +172,9 @@ function update_pandl() {
     type: "GET",
     url: "/pandl",
     success: function(data) {
+      clear_rows("#pandl_instrument_table");
+      clear_rows("#pandl_strategy_table");
+      clear_rows("#pandl_class_table");
       $.each(data["pandl_for_instruments_across_strategies"], function(k, v) {
         $("#pandl_instrument_table tbody").append(`<tr>
           <td>${v["codes"]}</td><td>${v["pandl"].toFixed(2)}</td></tr>`);
@@ -119,10 +191,15 @@ function update_pandl() {
       });
       $("#pandl > div.loading").hide();
       $("#pandl > table").show("slow");
+    },
+    error: function() {
+      restore_loading_state("#pandl");
     }
   }
   );
 }
+
+// --- processes -------------------------------------------------------------
 
 function update_processes() {
   $("#processes > div.loading").show();
@@ -131,14 +208,16 @@ function update_processes() {
     type: "GET",
     url: "/processes",
     success: function(data) {
+      clear_rows("#processes_config");
+      clear_rows("#processes_status");
+      clear_rows("#processes_prices");
       if (data['process']['run_stack_handler']['running'] == 'running') {
-        $('#stack-tl').addClass("green");
+        set_traffic_light('#stack-tl', "green");
       } else if (data['process']['run_stack_handler']['running'] == 'crashed') {
-        $('#stack-tl').addClass("red");
+        set_traffic_light('#stack-tl', "red");
       } else {
-        $('#stack-tl').addClass("orange");
+        set_traffic_light('#stack-tl', "orange");
       }
-      $("#processes_status > tbody").empty();
       $("#processes_config tbody").append(`
         <tr><td>Monitoring target</td><td>${data['config']['monitor']}</td></tr>
         <tr><td>Mongo DB</td><td>${data['config']['mongo']}</td></tr>
@@ -215,13 +294,18 @@ function update_processes() {
           price_overall = 'red';
         }
       });
-      $('#prices-tl').removeClass("red orange green").addClass(price_overall);
+      set_traffic_light('#prices-tl', price_overall);
       $("#processes > div.loading").hide();
       $("#processes > table").show("slow");
+    },
+    error: function() {
+      restore_loading_state("#processes");
     }
   }
   );
 }
+
+// --- reconciliation --------------------------------------------------------
 
 function update_reconcile() {
   $("#reconciliation > div.loading").show();
@@ -229,10 +313,9 @@ function update_reconcile() {
     type: "GET",
     url: "/reconcile",
     success: function(data) {
+      clear_rows("#reconcile_strategy");
+      clear_rows("#reconcile_contract");
       var overall = "green";
-      $("#reconcile_strategy > tbody").empty();
-      $("#reconcile_contract > tbody").empty();
-      $("#reconcile_broker > tbody").empty();
       $.each(data['optimal'], function(contract, details) {
 	if (details['optimal']['upper_position']) {
 	  // Static strategy
@@ -271,19 +354,23 @@ function update_reconcile() {
         $("#reconcile_contract tbody").append(line);
       }
       );
-      $('#breaks-tl').addClass(overall);
+      set_traffic_light('#breaks-tl', overall);
       if (data['gateway_ok']) {
-        $('#gateway-tl').addClass("green");
+        set_traffic_light('#gateway-tl', "green");
       } else {
-        $('#gateway-tl').addClass("red");
+        set_traffic_light('#gateway-tl', "red");
       }
       $("#reconciliation > div.loading").hide();
-      $("#tab_reconciliation").one("click", update_reconcile);
       $("#reconciliation > table").show("slow");
+    },
+    error: function() {
+      restore_loading_state("#reconciliation");
     }
   }
   );
 }
+
+// --- risk ------------------------------------------------------------------
 
 function update_risk() {
   $("#risk > div.loading").show();
@@ -292,6 +379,9 @@ function update_risk() {
     type: "GET",
     url: "/risk",
     success: function(data) {
+      clear_rows("#risk_table");
+      clear_rows("#risk_corr_table");
+      clear_rows("#risk_details_table");
       var cols = "<td></td>";
       $.each(data["correlations"], function(k, v) {
         var row = `<td>${k}</td>`;
@@ -306,7 +396,7 @@ function update_risk() {
       $.each(data["strategy_risk"], function(k,v) {
         $("#risk_table tbody").append(`<tr><td>${k}</td><td>${(v['risk']).toFixed(1)}</td></tr>`);
       });
-      
+
       $.each(data["instrument_risk"], function(k,v) {
         $("#risk_details_table tbody").append(`<tr><td>${k}</td>
           <td>${v["daily_price_stdev"].toFixed(1)}</td>
@@ -326,10 +416,15 @@ function update_risk() {
       });
       $("#risk > div.loading").hide();
       $("#risk > table").show("slow");
+    },
+    error: function() {
+      restore_loading_state("#risk");
     }
   }
   );
 }
+
+// --- rolls -----------------------------------------------------------------
 
 function update_rolls() {
   $("#rolls > div.loading").show();
@@ -338,24 +433,25 @@ function update_rolls() {
     type: "GET",
     url: "/rolls",
     success: function(data) {
-      $("#rolls_status > tbody").empty();
-      $("#rolls_details > tbody").empty();
+      clear_rows("#rolls_status");
       var overall = "green";
       $.each(data, function(contract, details) {
         var buttons = "";
         $.each(details['allowable'], function(_, option) {
           buttons += `<button onClick="roll_post('${contract}', '${option}')">${option}</button>`
         });
+        var relative_volume = parseFloat(details['relative_volume_fwd']);
+        var relative_volume_str = isNaN(relative_volume) ? "" : relative_volume.toFixed(3);
         $("#rolls_status tbody").append(`
           <tr id="rolls_${contract}"><td>${contract}</td>
-          <td>${details['status']}</td>
-          <td>${details['roll_expiry']}</td>
-          <td>${details['carry_expiry']}</td>
-          <td>${details['price_expiry']}</td>
-          <td>${details['contract_priced']}</td>
-          <td>${details['contract_fwd']}</td>
-          <td>${parseFloat(details['relative_volume_fwd']).toFixed(3)}</td>
-          <td>${details['position_priced']}</td>
+          <td>${display_value(details['status'])}</td>
+          <td>${display_value(details['roll_expiry'])}</td>
+          <td>${display_value(details['carry_expiry'])}</td>
+          <td>${display_value(details['price_expiry'])}</td>
+          <td>${display_value(details['contract_priced'])}</td>
+          <td>${display_value(details['contract_fwd'])}</td>
+          <td>${relative_volume_str}</td>
+          <td>${display_value(details['position_priced'])}</td>
           <td>${buttons}</td>
           </tr>`);
         if (details['roll_expiry'] < 0) {
@@ -365,12 +461,17 @@ function update_rolls() {
         }
       }
       );
-      $("#rolls-tl").removeClass("red orange green").addClass(overall);
+      set_traffic_light("#rolls-tl", overall);
       $("#rolls > div.loading").hide();
       $("#rolls > table").show("slow");
+    },
+    error: function() {
+      restore_loading_state("#rolls");
     }
   });
 }
+
+// --- strategy --------------------------------------------------------------
 
 function update_strategy() {
   $("#strategy > div.loading").show();
@@ -383,10 +484,15 @@ function update_strategy() {
       });
       $("#strategy > div.loading").hide();
       $("#strategy > table").show("slow");
+    },
+    error: function() {
+      restore_loading_state("#strategy");
     }
   }
   );
 }
+
+// --- trades ----------------------------------------------------------------
 
 function update_trades() {
   $("#trades > div.loading").show();
@@ -395,8 +501,13 @@ function update_trades() {
     type: "GET",
     url: "/trades",
     success: function(data) {
+      clear_rows("#trades_overview_table");
+      clear_rows("#trades_delay_table");
+      clear_rows("#trades_slippage_table");
+      clear_rows("#trades_vol_slippage_table");
+      clear_rows("#trades_cash_slippage_table");
       $.each(data["overview"], function(k, v) {
-        $("#trades_overview_table").append(`<tr>
+        $("#trades_overview_table tbody").append(`<tr>
           <td>${k}</td>
           <td>${v["instrument_code"]}</td>
           <td>${v["contract_date"]["date_str"]}</td>
@@ -407,7 +518,7 @@ function update_trades() {
           </tr>`)
       });
       $.each(data["delays"], function(k, v) {
-        $("#trades_delay_table").append(`<tr>
+        $("#trades_delay_table tbody").append(`<tr>
           <td>${k}</td>
           <td>${v["instrument_code"]}</td>
           <td>${v["strategy_name"]}</td>
@@ -419,7 +530,7 @@ function update_trades() {
           </tr>`)
       });
       $.each(data["raw_slippage"], function(k, v) {
-        $("#trades_slippage_table").append(`<tr>
+        $("#trades_slippage_table tbody").append(`<tr>
           <td>${k}</td>
           <td>${v["instrument_code"]}</td>
           <td>${v["strategy_name"]}</td>
@@ -439,7 +550,7 @@ function update_trades() {
           </tr>`)
       });
       $.each(data["vol_slippage"], function(k, v) {
-        $("#trades_vol_slippage_table").append(`<tr>
+        $("#trades_vol_slippage_table tbody").append(`<tr>
           <td>${k}</td>
           <td>${v["instrument_code"]}</td>
           <td>${v["strategy_name"]}</td>
@@ -454,7 +565,7 @@ function update_trades() {
           </tr>`)
       });
       $.each(data["cash_slippage"], function(k, v) {
-        $("#trades_cash_slippage_table").append(`<tr>
+        $("#trades_cash_slippage_table tbody").append(`<tr>
           <td>${k}</td>
           <td>${v["instrument_code"]}</td>
           <td>${v["strategy_name"]}</td>
@@ -470,10 +581,15 @@ function update_trades() {
       });
       $("#trades > div.loading").hide();
       $("#trades > table").show("slow");
+    },
+    error: function() {
+      restore_loading_state("#trades");
     }
   }
   );
 }
+
+// --- roll actions ----------------------------------------------------------
 
 function roll_post(instrument, state, confirmed = false) {
   // Disable all the buttons to avoid multiple presses
@@ -534,7 +650,7 @@ function roll_post(instrument, state, confirmed = false) {
         $("#rolls_" + instrument).find("td:eq(1)").html(data["new_state"]);
         $("#rolls_" + instrument).find("td:eq(9)").html(buttons);
       }
-      
+
       $("#rolls button").each(function(_, btn) {
         btn.disabled = false;
       });
@@ -543,16 +659,85 @@ function roll_post(instrument, state, confirmed = false) {
   });
 }
 
-$(document).ready(update_capital());
-$(document).ready(update_forex());
-$(document).ready(update_processes());
-$(document).ready(update_reconcile());
-$(document).ready(update_rolls());
+// --- refresh orchestration -------------------------------------------------
+
+var TAB_UPDATERS = {
+  tab_rolls: update_rolls,
+  tab_processes: update_processes,
+  tab_pandl: update_pandl,
+  tab_trades: update_trades,
+  tab_reconciliation: update_reconcile,
+  tab_strategy: update_strategy,
+  tab_risk: update_risk,
+  tab_liquidity: update_liquidity,
+  tab_costs: update_costs,
+  tab_forex: update_forex
+};
+
+function active_tab_id() {
+  return $("input[name='tabs']:checked").attr("id");
+}
+
+function update_active_tab() {
+  var updater = TAB_UPDATERS[active_tab_id()];
+  if (updater) {
+    updater();
+  }
+}
+
+// Skip a refresh cycle if the previous one is still running, so that slow
+// endpoints cannot build up overlapping requests.
+var refresh_in_progress = false;
+
+function refresh_dashboard() {
+  if (refresh_in_progress) {
+    return;
+  }
+  refresh_in_progress = true;
+
+  // Traffic light widgets and the always visible tables first.
+  var updaters = [update_capital, update_processes, update_reconcile, update_rolls];
+  var tab_updater = TAB_UPDATERS[active_tab_id()];
+  if (tab_updater && updaters.indexOf(tab_updater) === -1) {
+    updaters.push(tab_updater);
+  }
+  updaters.forEach(function(updater) {
+    updater();
+  });
+}
+
+// Surface endpoint failures instead of silently showing stale or blank tables.
+var pending_requests = 0;
+var cycle_errors = [];
+
+$(document).ajaxSend(function() {
+  pending_requests += 1;
+});
+
+$(document).ajaxError(function(event, jqXHR, settings, thrownError) {
+  cycle_errors.push(settings.url + " (" + jqXHR.status + " " + (thrownError || jqXHR.statusText) + ")");
+});
+
+$(document).ajaxComplete(function() {
+  pending_requests -= 1;
+  if (pending_requests > 0) {
+    return;
+  }
+  refresh_in_progress = false;
+  if (cycle_errors.length) {
+    show_dashboard_message("Some requests failed: " + cycle_errors.join(", "));
+    cycle_errors = [];
+  } else {
+    clear_dashboard_message();
+    mark_updated();
+  }
+});
+
 $(document).ready(function() {
-  $("#tab_costs").one("click", update_costs);
-  $("#tab_risk").one("click", update_risk);
-  $("#tab_pandl").one("click", update_pandl);
-  $("#tab_trades").one("click", update_trades);
-  $("#tab_strategy").one("click", update_strategy);
-  $("#tab_liquidity").one("click", update_liquidity);
+  $("input[name='tabs']").on("change", update_active_tab);
+
+  refresh_dashboard();
+  if (DASHBOARD_REFRESH_MS > 0) {
+    setInterval(refresh_dashboard, DASHBOARD_REFRESH_MS);
+  }
 });
