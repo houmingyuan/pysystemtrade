@@ -22,6 +22,7 @@ import subprocess
 import pandas as pd
 
 from sysdata.csv.csv_futures_contract_prices import ConfigCsvFuturesPrices
+from syscore.constants import arg_not_supplied
 from sysinit.futures.adjustedprices_from_db_multiple_to_db import (
     process_adjusted_prices_single_instrument,
 )
@@ -30,6 +31,9 @@ from sysinit.futures.contract_prices_from_split_freq_csv_to_db import (
 )
 from sysinit.futures.multipleprices_from_db_prices_and_csv_calendars_to_db import (
     process_multiple_prices_single_instrument,
+)
+from sysinit.futures.rollcalendars_from_db_prices_to_csv import (
+    build_and_write_roll_calendar,
 )
 
 ADJUSTED_PATH = "/Users/henrik/data/parquet/futures_adjusted_prices"
@@ -87,16 +91,26 @@ def import_instrument(instrument_code: str, datapath: str, create: bool) -> str:
     init_db_with_split_freq_csv_prices_for_code(
         instrument_code, datapath=datapath, csv_config=BARCHART_CONFIG
     )
-    subprocess.run(
-        [
-            "python3",
-            "sysinit/henrik/rebuild_roll_calendar_from_volume.py",
-            "--instrument",
+    # 优先成交量法重建日历；成交量缺失（季度挂牌、Barchart 无 volume）时回退到
+    # rollconfig 参数法，否则新品种的链条永远建不起来（GILT2/GILT5 就是这种情形）。
+    try:
+        subprocess.run(
+            [
+                "python3",
+                "sysinit/henrik/rebuild_roll_calendar_from_volume.py",
+                "--instrument",
+                instrument_code,
+            ],
+            check=True,
+            capture_output=True,
+        )
+    except subprocess.CalledProcessError:
+        build_and_write_roll_calendar(
             instrument_code,
-        ],
-        check=True,
-        capture_output=True,
-    )
+            output_datapath=arg_not_supplied,
+            write=True,
+            check_before_writing=False,
+        )
     process_multiple_prices_single_instrument(
         instrument_code,
         adjust_calendar_to_prices=False,
