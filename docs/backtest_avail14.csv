@@ -1,0 +1,4 @@
+window,days,start,end,cumulative,annual_return,annual_volatility,sharpe,max_drawdown,gross_annual,gross_sharpe,costs_annual_pct
+full,12160,1980-03-14,2026-10-22,192.5307,0.1172,0.1799,0.71,-0.4427,0.1302,0.77,-1.51
+last10y,2609,2016-10-24,2026-10-22,0.3104,0.0269,0.1739,0.24,-0.3841,0.0423,0.33,-1.49
+last5y,1305,2021-10-22,2026-10-22,-0.0787,-0.016,0.1612,-0.02,-0.3841,-0.0001,0.08,-1.6

@@ -1,0 +1,12 @@
+carry30_sa
+momentum16
+relcarry
+assettrend4
+momentum64
+assettrend8
+accel16
+skewabs180
+kurtS_rv180
+kurtS_abs180
+mrinasset1000
+kurtabs180

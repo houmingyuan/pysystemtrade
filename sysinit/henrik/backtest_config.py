@@ -13,6 +13,10 @@
     python3 sysinit/henrik/backtest_config.py \
         --config private/futures_1m_v0.yaml --system v0 \
         --output docs/backtest_v0.csv
+
+    # 动态优化（小资本），--capital 覆盖配置里的资本，--rolling 输出滚动 5 年分布
+    python3 sysinit/henrik/backtest_config.py \
+        --config private/futures_1m_v8c.yaml --system do --capital 155000 --rolling
 """
 
 import argparse
@@ -26,21 +30,36 @@ from sysproduction.data.sim_data import get_sim_data_object_for_production
 BUSINESS_DAYS_IN_YEAR = 256
 
 
-def build_system(config_filename: str, system_name: str):
+def build_system(config_filename: str, system_name: str, capital: float = None):
     data = get_sim_data_object_for_production()
     config = Config(config_filename)
+    if capital is not None:
+        # 与生产 dynamic_system 的覆盖方式一致
+        config.notional_trading_capital = capital
 
     if system_name == "v0":
         from systems.provided.v0_system.run_system import futures_system
+    elif system_name == "do":
+        from systems.provided.v0_system.run_system import (
+            futures_system_dynamic as futures_system,
+        )
     else:
         from systems.provided.futures_chapter15.basesystem import futures_system
 
     return futures_system(data=data, config=config)
 
 
+def portfolio_for_system(system):
+    """动态优化系统用优化后的整数仓位组合，其余用标准组合。"""
+    if hasattr(system.accounts, "optimised_portfolio"):
+        return system.accounts.optimised_portfolio()
+
+    return system.accounts.portfolio()
+
+
 def daily_returns_for_system(system) -> pd.Series:
     """组合日收益（百分比，已含成本与整手取整）。"""
-    portfolio = system.accounts.portfolio()
+    portfolio = portfolio_for_system(system)
     daily = portfolio.percent.daily
 
     return daily.as_ts.dropna()
@@ -48,7 +67,7 @@ def daily_returns_for_system(system) -> pd.Series:
 
 def net_gross_cost_returns(system) -> dict:
     """组合日收益（净/毛/成本，百分比）。"""
-    portfolio = system.accounts.portfolio()
+    portfolio = portfolio_for_system(system)
 
     return dict(
         net=portfolio.percent.daily.as_ts.dropna(),
@@ -80,9 +99,14 @@ def average_rule_weights(system, start=None) -> pd.Series:
 def instrument_attribution(system, start=None, top_n: int = 10) -> pd.DataFrame:
     """按品种拆解损益（百分比，正负为贡献方向）。"""
     rows = {}
+    pandl_for_instrument = getattr(
+        system.accounts,
+        "pandl_for_optimised_instrument",
+        system.accounts.pandl_for_instrument,
+    )
     for instrument_code in system.get_instrument_list():
         try:
-            curve = system.accounts.pandl_for_instrument(instrument_code)
+            curve = pandl_for_instrument(instrument_code)
         except Exception:
             continue
         returns = curve.percent.daily.as_ts.dropna()
@@ -129,6 +153,38 @@ def metrics(returns: pd.Series) -> dict:
     )
 
 
+def rolling_window_stats(returns: pd.Series, years: int = 5, step: int = 21) -> dict:
+    """滚动窗口（默认 5 年，每 21 个交易日取一个）的累计收益与 Sharpe 分布。"""
+    returns = returns.dropna() / 100.0
+    window = years * BUSINESS_DAYS_IN_YEAR
+    sharpes, cumulatives = [], []
+    for end in range(window, len(returns) + 1, step):
+        chunk = returns.iloc[end - window : end]
+        if chunk.std() == 0:
+            # 早期还没有持仓的窗口
+            continue
+        sharpes.append(chunk.mean() / chunk.std() * np.sqrt(BUSINESS_DAYS_IN_YEAR))
+        cumulatives.append((1 + chunk).prod() - 1)
+    if not sharpes:
+        return {}
+
+    sharpes, cumulatives = np.array(sharpes), np.array(cumulatives)
+
+    return dict(
+        windows=len(sharpes),
+        share_negative=round(float((cumulatives < 0).mean()), 3),
+        sharpe_min=round(float(sharpes.min()), 2),
+        sharpe_p10=round(float(np.percentile(sharpes, 10)), 2),
+        sharpe_median=round(float(np.median(sharpes)), 2),
+    )
+
+
+def yearly_returns(returns: pd.Series, since: str = "2016-01-01") -> pd.Series:
+    returns = returns[returns.index >= since].dropna() / 100.0
+
+    return (1 + returns).groupby(returns.index.year).prod() - 1
+
+
 def windows_for(index: pd.DatetimeIndex) -> list:
     end = index[-1]
 
@@ -139,8 +195,7 @@ def windows_for(index: pd.DatetimeIndex) -> list:
     ]
 
 
-def backtest(config_filename: str, system_name: str, output_filename: str) -> pd.DataFrame:
-    system = build_system(config_filename, system_name)
+def backtest(system, output_filename: str) -> pd.DataFrame:
     curves = net_gross_cost_returns(system)
     returns = curves["net"]
 
@@ -179,8 +234,12 @@ def main():
     parser.add_argument(
         "--system",
         default="classic",
-        choices=["classic", "v0"],
-        help="classic：标准生产管线；v0：带 myFuturesRawData 的管线（skew 规则需要）",
+        choices=["classic", "v0", "do"],
+        help="classic：标准生产管线；v0：带 myFuturesRawData 的管线（skew 规则需要）；"
+        "do：v0 + 动态优化（小资本）",
+    )
+    parser.add_argument(
+        "--capital", type=float, default=None, help="覆盖配置里的 notional_trading_capital"
     )
     parser.add_argument("--output", default="/private/tmp/backtest_config.csv")
     parser.add_argument(
@@ -191,13 +250,27 @@ def main():
         action="store_true",
         help="同时输出近 5 年按品种的损益贡献（含实现波动）",
     )
+    parser.add_argument(
+        "--rolling",
+        action="store_true",
+        help="同时输出滚动 5 年窗口分布与 2016 年以来的逐年收益",
+    )
     args = parser.parse_args()
 
-    table = backtest(args.config, args.system, args.output)
-    print(f"{args.config}（{args.system}）")
+    # 只构建一次系统：动态优化一次要算几分钟，各项输出共用缓存
+    system = build_system(args.config, args.system, capital=args.capital)
+    table = backtest(system, args.output)
+    capital = system.config.notional_trading_capital
+    print(f"{args.config}（{args.system}，资本 {capital:,.0f}）")
     print(table.to_markdown())
+    if args.rolling:
+        returns = daily_returns_for_system(system)
+        print("\n滚动 5 年窗口：", rolling_window_stats(returns))
+        since_2000 = rolling_window_stats(returns[returns.index >= "2000-01-01"])
+        print("2000 年以来的滚动 5 年窗口：", since_2000)
+        yearly = yearly_returns(returns)
+        print("逐年收益：", ", ".join(f"{year} {value:+.1%}" for year, value in yearly.items()))
     if args.weights:
-        system = build_system(args.config, args.system)
         end = daily_returns_for_system(system).index[-1]
         for label, start in [
             ("全历史", None),
@@ -207,7 +280,6 @@ def main():
             print(f"\n{label}平均预测权重（占比 %）：")
             print((weights * 100).round(1).to_string())
     if args.attribution:
-        system = build_system(args.config, args.system)
         end = daily_returns_for_system(system).index[-1]
         table = instrument_attribution(system, start=end - pd.DateOffset(years=5))
         print("\n近 5 年品种损益归因（贡献为区间复利，按贡献升序）：")
