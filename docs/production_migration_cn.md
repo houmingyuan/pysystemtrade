@@ -68,13 +68,13 @@
 
 | 编号 | 问题（已核实） | 改法 |
 | --- | --- | --- |
-| P1 路径写死 | `run_daily_data_update` 第 37、39 行写死 `envs/invest` 与 `/Volumes/data/systrade`；`sysinit/henrik` 下另有 6 个工具写死 `/Volumes/data/systrade` | **已完成（2026-11-02，未提交）**：日更脚本开头显式 `source ~/.pysystemtrade.env`（launchd 不加载 shell 配置），Python 与代码目录取 `PYSYS_PYTHON`、`PYSYS_CODE`，数据根目录默认 `~/data`（可用 `PYSYS_DATA_ROOT` 覆盖）；6 个工具的默认路径改到 `~/data` 下 |
-| P2 运行数据写进代码目录 | 框架默认的日历目录和 18 个脚本都指向代码目录里的 `data/futures/roll_calendars_csv`，失滚重建与 Barchart 导入会写入；`email.log` 因为没设 `email_store_filename` 写在当前目录，而日更脚本会先 `cd` 到代码目录；`pysystemtrade.log` 只在不带 `--file` 启动日志服务时写在当前目录（`syslogging/server.py:82`） | **已完成（2026-11-02，未提交）**：日历目录统一由 `sysdata/csv/csv_roll_calendars.py` 的 `roll_calendar_directory()` 决定，环境变量 `PYSYS_ROLL_CALENDARS_DIR` 优先，生产在 `~/.pysystemtrade.env` 里指向 `~/data/roll_calendars_csv`，开发机不设（日历仍在仓库里、受 git 管理）；用环境变量而不是 `private_config.yaml`，是因为后者会从开发机同步过去覆盖掉。`private_config.yaml` 已设 `email_store_filename: /Users/henrik/data/log/email.log`。调用日历重建的 4 处子进程改用当前解释器和绝对路径。日志服务如需启用，用 `--file ~/data/log/pysystemtrade.log` |
+| P1 路径写死 | `run_daily_data_update` 第 37、39 行写死 `envs/invest` 与 `/Volumes/data/systrade`；`sysinit/henrik` 下另有 6 个工具写死 `/Volumes/data/systrade` | **已完成（2026-11-02）**：日更脚本开头显式 `source ~/.pysystemtrade.env`（launchd 不加载 shell 配置），Python 与代码目录取 `PYSYS_PYTHON`、`PYSYS_CODE`，数据根目录默认 `~/data`（可用 `PYSYS_DATA_ROOT` 覆盖）；6 个工具的默认路径改到 `~/data` 下 |
+| P2 运行数据写进代码目录 | 框架默认的日历目录和 18 个脚本都指向代码目录里的 `data/futures/roll_calendars_csv`，失滚重建与 Barchart 导入会写入；`email.log` 因为没设 `email_store_filename` 写在当前目录，而日更脚本会先 `cd` 到代码目录；`pysystemtrade.log` 只在不带 `--file` 启动日志服务时写在当前目录（`syslogging/server.py:82`） | **已完成（2026-11-02）**：日历目录统一由 `sysdata/csv/csv_roll_calendars.py` 的 `roll_calendar_directory()` 决定，环境变量 `PYSYS_ROLL_CALENDARS_DIR` 优先，生产在 `~/.pysystemtrade.env` 里指向 `~/data/roll_calendars_csv`，开发机不设（日历仍在仓库里、受 git 管理）；用环境变量而不是 `private_config.yaml`，是因为后者会从开发机同步过去覆盖掉。`private_config.yaml` 已设 `email_store_filename: /Users/henrik/data/log/email.log`。调用日历重建的 4 处子进程改用当前解释器和绝对路径。日志服务如需启用，用 `--file ~/data/log/pysystemtrade.log` |
 | P3 加载到旧代码 | 日更里 `sysinit/henrik` 的 5 个脚本按文件路径启动、不改 `sys.path`，生产机 `mini-invest` 里的 pysystemtrade 1.8.2 会被优先加载 | 生产环境用 `pip install -e ~/dev/pysystemtrade`；冒烟测试不设 `PYTHONPATH`，检查实际加载路径 |
-| P4 发布前测试 | 完整 `pytest` 有 8 个旧失败：6 个 doctest 因 numpy 2 改了标量显示（`np.int64(2)`），1 个交易时间测试读到了本机 `private/` 的自定义交易时间，1 个测试断言的是旧提示文字 | **已完成（2026-11-02，未提交）**：根目录 `conftest.py` 在测试时用 numpy 1.x 的显示方式；交易时间测试在 `private/` 有自定义文件时跳过并写明原因；断言改为当前的提示文字。完整 `pytest` 0 失败（149 通过） |
+| P4 发布前测试 | 完整 `pytest` 有 8 个旧失败：6 个 doctest 因 numpy 2 改了标量显示（`np.int64(2)`），1 个交易时间测试读到了本机 `private/` 的自定义交易时间，1 个测试断言的是旧提示文字 | **已完成（2026-11-02）**：根目录 `conftest.py` 在测试时用 numpy 1.x 的显示方式；交易时间测试在 `private/` 有自定义文件时跳过并写明原因；断言改为当前的提示文字。完整 `pytest` 0 失败（149 通过） |
 | P5 命令行工具 | openrsync 不支持 `--info=progress2`；两台机器都没有 `rg` | 两台机器 `brew install rsync`，远端加 `--rsync-path=/opt/homebrew/bin/rsync`；命令只用 `grep` / `pgrep` |
 | P6 宿主环境 | 生产机未装 IB Gateway；不自动登录，断电后不自启 | 按 `start_ib_gateways` 装两个实例（阶段 2）；`sudo pmset -a autorestart 1`；是否开启自动登录、是否用 IBC 由用户决定；07:30 检查 4001 / 4002，未监听就发邮件 |
-| P7 未提交的工作 | 自 10-09 起有 62 个修改、135 个新增的换月日历和 `rollconfig.csv` 未提交（11-01 统计） | 代码与配置先提交；日历按 P2 作为数据迁移 |
+| P7 未提交的工作 | 自 10-09 起有 62 个修改、135 个新增的换月日历和 `rollconfig.csv` 未提交（11-01 统计）；其中 CAC、NIKKEI-SGX、NIKKEI-JPY、CRUDE_ICE 的日历被 10-21 的失滚重建改写，CAC、NIKKEI-SGX 的历史被截到 2000 年 | **进行中（2026-11-02）**：P1–P4 已提交到分支 `fir-251-migration-prep`（未推送、未合入 develop）；Codex 的 Barchart 批次（日历、`rollconfig.csv`、合约映射脚本）待导入完成后由 Codex 按 FIR-224~250 提交；上述 4 个日历先修重建逻辑（只延伸尾部、不改历史行）再恢复，阶段 1 复制日历前必须处理完 |
 
 P1–P4 都要改代码：单独开工单，在开发机测试通过后合入 `origin/develop`，再打首个发布 tag。
 
@@ -117,7 +117,7 @@ mkdir -p "$base" && cd "$base"
 (cd ~/data/parquet && find . -type f -print0 | LC_ALL=C sort -z | xargs -0 shasum -a 256) > parquet.sha256
 mongodump --uri=mongodb://127.0.0.1:27017 --gzip --archive=mongo.archive
 shasum -a 256 mongo.archive > mongo.archive.sha256
-cp -Rp ~/dev/pysystemtrade/data/futures/roll_calendars_csv roll_calendars_csv
+cp -Rp ~/dev/pysystemtrade/data/futures/roll_calendars_csv roll_calendars_csv   # 先处理 P7 里的 4 个日历
 mongosh --quiet --eval 'db.adminCommand({listDatabases: 1}).databases.forEach(d => {
   const x = db.getSiblingDB(d.name);
   x.getCollectionNames().forEach(c => print(d.name, c, x[c].countDocuments({})));
