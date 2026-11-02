@@ -29,6 +29,12 @@ venv/
 # libreoffice
 .~lock.*
 
+# runtime logs
+*.log
+
+# reference books and papers (copyrighted)
+*.pdf
+
 data/backups_csv/contract_prices/*.csv
 data/futures/roll_calendars_csv/new/*.csv
 data/futures/roll_calendars_csv/new/BITCOIN.csv
