@@ -1,8 +1,21 @@
 import datetime
+
+import pytest
+
+from syscore.fileutils import (
+    does_resolved_filename_exist,
+    resolve_path_and_filename_for_package,
+)
 from sysdata.config.configdata import Config
 from sysdata.config.control_config import get_control_config
-from sysdata.config.private_config import PRIVATE_CONFIG_DIR_ENV_VAR
-from sysbrokers.IB.ib_trading_hours import get_saved_trading_hours
+from sysdata.config.private_config import (
+    PRIVATE_CONFIG_DIR_ENV_VAR,
+    get_private_config_dir,
+)
+from sysbrokers.IB.ib_trading_hours import (
+    PRIVATE_CONFIG_TRADING_HOURS_FILE,
+    get_saved_trading_hours,
+)
 
 
 class TestConfig:
@@ -82,6 +95,11 @@ class TestConfig:
 
     def test_trading_hours_default(self, monkeypatch):
         monkeypatch.delenv(PRIVATE_CONFIG_DIR_ENV_VAR, raising=False)
+        private_path = resolve_path_and_filename_for_package(
+            get_private_config_dir(), PRIVATE_CONFIG_TRADING_HOURS_FILE
+        )
+        if does_resolved_filename_exist(private_path):
+            pytest.skip("private/ has its own trading hours, so the default does not apply")
         config = get_saved_trading_hours()
         assert config["MET"]["Monday"][0].closing_time == datetime.time(15)
 

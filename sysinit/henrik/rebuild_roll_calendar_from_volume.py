@@ -21,14 +21,14 @@ import sys
 
 import pandas as pd
 
-from sysdata.csv.csv_roll_calendars import csvRollCalendarData
+from sysdata.csv.csv_roll_calendars import csvRollCalendarData, roll_calendar_directory
 from sysdata.csv.csv_roll_parameters import csvRollParametersData
 import sysinit.futures.rebuild_roll_calendar_from_prices as R
 from sysobjects.contract_dates_and_expiries import contractDate
 from sysobjects.rolls import contractDateWithRollParameters
 
 CP_PATH = "/Users/henrik/data/parquet/futures_contract_prices"
-ROLL_CALENDAR_PATH = "data/futures/roll_calendars_csv"
+ROLL_CALENDAR_PATH = roll_calendar_directory()
 SMOOTH_DAYS = 3
 NEAR_MAX_RATIO = 0.5
 

@@ -22,12 +22,12 @@ from datetime import datetime
 import pandas as pd
 
 from sysobjects.roll_calendars import rollCalendar
-from sysdata.csv.csv_roll_calendars import csvRollCalendarData
+from sysdata.csv.csv_roll_calendars import csvRollCalendarData, roll_calendar_directory
 from sysdata.csv.csv_roll_parameters import csvRollParametersData
 from sysproduction.data.prices import diagPrices
 
 
-ROLL_CALENDAR_PATH = "data/futures/roll_calendars_csv"
+ROLL_CALENDAR_PATH = roll_calendar_directory()
 
 # Extend if roll calendar ends more than this many days before contract data ends
 EXTEND_THRESHOLD_DAYS = 60

@@ -27,16 +27,22 @@
 #   DATA_CHECK_MAX_SPIKES   数据面校验允许的被拒合约数（默认 0，即任何被拒都算异常）
 #                           正常日应为 0；如尖峰噪声太多可临时放宽
 #   DATA_CHECK_MAX_STALE_DAYS  multiple prices 允许落后合约价格的天数（默认 7）
+#   PYSYS_PYTHON / PYSYS_CODE  Python 解释器与代码目录，来自 ~/.pysystemtrade.env
+#   PYSYS_DATA_ROOT            数据根目录（默认 ~/data）
 #
 # 由 ~/Library/LaunchAgents/com.henrik.systrade.update.plist 调度，
-# 每日 08:00 运行。全部路径写绝对路径，不依赖 PATH / ~ 软链接 / conda activate。
+# 每日 08:00 运行。不依赖 PATH 与 conda activate，路径见下方「路径」一节。
 
 set -u
 
-# ---------- 固定路径 ----------
-PY=/Users/henrik/miniconda3/envs/invest/bin/python
-PST_DIR=/Users/henrik/dev/pysystemtrade
-DATA_ROOT=/Volumes/data/systrade
+# ---------- 路径 ----------
+# launchd 不加载 shell 配置，所以这里显式读取 ~/.pysystemtrade.env。
+# ~/data 在开发机指向 /Volumes/data/systrade，在生产机指向 /Volumes/cv/systrade/data。
+ENV_FILE=$HOME/.pysystemtrade.env
+[ -f "$ENV_FILE" ] && source "$ENV_FILE"
+PY=${PYSYS_PYTHON:-$HOME/miniconda3/envs/invest/bin/python}
+PST_DIR=${PYSYS_CODE:-$HOME/dev/pysystemtrade}
+DATA_ROOT=${PYSYS_DATA_ROOT:-$HOME/data}
 LOG_DIR=$DATA_ROOT/log
 LOG_FILE=$LOG_DIR/update_$(date +%Y%m%d).log
 VOLUME_WAIT_SECS=1800          # 等待外置卷挂载的最长时间（秒）
@@ -149,10 +155,9 @@ if [ "$UPDATE_FUTURES" = true ]; then
     run_step "采样合约" "$PY" -u -m sysproduction.run_daily_contract_sampling
     # 中断补数（FIR-219）：上一次数据距今 >2 天时，等效日变化可能超过常态尖峰阈值，
     # 临时放宽到 8*sqrt(间隔天数)，仅本次运行生效（cleaner 读 PYSYS_MAX_PRICE_SPIKE）。
-    LAST_PRICE_DATE=$("$PY" - <<'PYEOF' 2>/dev/null || echo ""
-import pandas as pd
-path = "/Users/henrik/data/parquet/futures_adjusted_prices/CORN.parquet"
-print(pd.read_parquet(path).index[-1].date())
+    LAST_PRICE_DATE=$("$PY" - "$DATA_ROOT/parquet/futures_adjusted_prices/CORN.parquet" <<'PYEOF' 2>/dev/null || echo ""
+import sys, pandas as pd
+print(pd.read_parquet(sys.argv[1]).index[-1].date())
 PYEOF
 )
     if [ -n "$LAST_PRICE_DATE" ]; then

@@ -5,7 +5,7 @@ FIR-127 只读归因：把每日更新中「价格尖峰被拒」的合约，重
 
 用法：
     python sysinit/henrik/audit_ib_price_spikes.py                 # 解析最近一份更新日志里的被拒合约
-    python sysinit/henrik/audit_ib_price_spikes.py --log /Volumes/data/systrade/log/update_20260924.log
+    python sysinit/henrik/audit_ib_price_spikes.py --log ~/data/log/update_20260924.log
     python sysinit/henrik/audit_ib_price_spikes.py --limit 20       # 先试前 20 个
     python sysinit/henrik/audit_ib_price_spikes.py --frequency both # 日线 + 小时线
 """
@@ -34,7 +34,7 @@ from sysobjects.contracts import futuresContract
 from sysproduction.data.broker import dataBroker
 from sysproduction.data.prices import diagPrices
 
-DEFAULT_LOG_DIR = "/Volumes/data/systrade/log"
+DEFAULT_LOG_DIR = os.path.expanduser("~/data/log")
 LOG_FILE_PATTERN = "update_*.log"
 OUTPUT_CSV = "/tmp/fir127_spike_audit.csv"
 MAX_PRICE_SPIKE = 8.0

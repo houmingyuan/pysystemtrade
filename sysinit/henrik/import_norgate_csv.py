@@ -31,8 +31,8 @@ from sysinit.futures.contract_prices_from_csv_to_db import (
     init_db_with_csv_futures_contract_prices_for_code,
 )
 
-NORGATE_DIR = "/Volumes/data/systrade/norgate_export"
-PREPARED_DIR = "/Volumes/data/systrade/norgate_export_usd"
+NORGATE_DIR = os.path.expanduser("~/data/norgate_export")
+PREPARED_DIR = os.path.expanduser("~/data/norgate_export_usd")
 
 # 需要从美分换算为美元的品种（IB 实测确认 100 倍差异）
 CENTS_TO_DOLLARS = ("SILVER", "COPPER")

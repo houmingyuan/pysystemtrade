@@ -1,15 +1,33 @@
+import os
+
 from sysobjects.roll_calendars import rollCalendar
 from sysdata.futures.roll_calendars import rollCalendarData
 from syscore.fileutils import (
     resolve_path_and_filename_for_package,
     files_with_extension_in_pathname,
+    get_resolved_pathname,
 )
 from syscore.pandas.pdutils import pd_readcsv
 from syscore.constants import arg_not_supplied
 from syslogging.logger import *
 
 CSV_ROLL_CALENDAR_DIRECTORY = "data.futures.roll_calendars_csv"
+ROLL_CALENDAR_DIRECTORY_ENV_VAR = "PYSYS_ROLL_CALENDARS_DIR"
 DATE_INDEX_NAME = "DATE_TIME"
+
+
+def roll_calendar_directory() -> str:
+    """
+    Directory of the csv roll calendars
+
+    PYSYS_ROLL_CALENDARS_DIR overrides the default in the repository, so a production
+    machine can keep calendars, which it rewrites, outside the code directory.
+    """
+    override = os.environ.get(ROLL_CALENDAR_DIRECTORY_ENV_VAR)
+    if override:
+        return os.path.expanduser(override)
+
+    return get_resolved_pathname(CSV_ROLL_CALENDAR_DIRECTORY)
 
 # NOTE: can't change calendars here - do we need init?
 # common with all other csv objects?
@@ -27,7 +45,7 @@ class csvRollCalendarData(rollCalendarData):
         super().__init__(log=log)
 
         if datapath is arg_not_supplied:
-            datapath = CSV_ROLL_CALENDAR_DIRECTORY
+            datapath = roll_calendar_directory()
 
         self._datapath = datapath
 

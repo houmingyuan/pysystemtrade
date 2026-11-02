@@ -2,10 +2,11 @@ import shutil
 import os
 import pandas as pd
 from sysdata.config.control_config import get_control_config
+from sysdata.csv.csv_roll_calendars import roll_calendar_directory
 from sysinit.futures.rollcalendars_from_db_prices_to_csv import build_and_write_roll_calendar
 
-roll_calendars_path = "/Users/henrik/dev/pysystemtrade/data/futures/roll_calendars_csv/new"
-dst_roll_calendars_path = "/Users/henrik/dev/pysystemtrade/data/futures/roll_calendars_csv"
+roll_calendars_path = os.path.join(roll_calendar_directory(), "new")
+dst_roll_calendars_path = roll_calendar_directory()
 def merge_roll_calendars(instrument_code, from_dir, dst_dir):
     from_path = os.path.join(from_dir, instrument_code + ".csv")
     dst_path = os.path.join(dst_dir, instrument_code + ".csv")

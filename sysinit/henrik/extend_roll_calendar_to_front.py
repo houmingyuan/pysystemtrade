@@ -25,12 +25,12 @@ import pandas as pd
 from sysdata.data_blob import dataBlob
 from sysobjects.contracts import contractDate
 from sysobjects.rolls import contractDateWithRollParameters
-from sysdata.csv.csv_roll_calendars import csvRollCalendarData
+from sysdata.csv.csv_roll_calendars import csvRollCalendarData, roll_calendar_directory
 from sysdata.csv.csv_roll_parameters import csvRollParametersData
 from sysproduction.data.broker import dataBroker
 from sysproduction.data.prices import diagPrices
 
-ROLL_CALENDAR_PATH = "data/futures/roll_calendars_csv"
+ROLL_CALENDAR_PATH = roll_calendar_directory()
 
 
 def price_dates_by_contract(instrument_code: str) -> dict:

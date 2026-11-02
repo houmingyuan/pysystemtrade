@@ -32,12 +32,12 @@ from pathlib import Path
 import pandas as pd
 
 from sysobjects.roll_calendars import rollCalendar
-from sysdata.csv.csv_roll_calendars import csvRollCalendarData
+from sysdata.csv.csv_roll_calendars import csvRollCalendarData, roll_calendar_directory
 from sysdata.csv.csv_roll_parameters import csvRollParametersData
 from sysproduction.data.prices import diagPrices
 
 # Output paths - adjust this to your PST installation
-ROLL_CALENDAR_PATH = "data/futures/roll_calendars_csv"
+ROLL_CALENDAR_PATH = roll_calendar_directory()
 
 # Minimum gap (in days) to consider a roll calendar "truncated"
 MIN_GAP_DAYS = 365

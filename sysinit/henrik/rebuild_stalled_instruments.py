@@ -19,7 +19,9 @@ multiple（不强对齐）+ adjusted 可修复其中大多数。
 """
 
 import argparse
+import os
 import subprocess
+import sys
 
 import pandas as pd
 
@@ -37,6 +39,8 @@ from sysinit.henrik.check_daily_data_update import (
 from sysproduction.data.prices import diagPrices
 
 ADJUSTED_PATH = "/Users/henrik/data/parquet/futures_adjusted_prices"
+# 按绝对路径和当前解释器调用，不依赖当前目录与 PATH 里的 python3
+REBUILD_SCRIPT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "rebuild_roll_calendar_from_volume.py")
 
 
 def stalled_instruments(
@@ -64,8 +68,8 @@ def rebuild(instrument_code: str) -> str:
     before = pd.read_parquet(f"{ADJUSTED_PATH}/{instrument_code}.parquet").index[-1].date()
     subprocess.run(
         [
-            "python3",
-            "sysinit/henrik/rebuild_roll_calendar_from_volume.py",
+            sys.executable,
+            REBUILD_SCRIPT,
             "--instrument",
             instrument_code,
         ],

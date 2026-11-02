@@ -24,9 +24,9 @@ import os
 import pandas as pd
 
 from syscore.fileutils import get_resolved_pathname
-from sysdata.csv.csv_roll_calendars import csvRollCalendarData
+from sysdata.csv.csv_roll_calendars import csvRollCalendarData, roll_calendar_directory
 
-ROLL_CALENDAR_PATH = "data/futures/roll_calendars_csv"
+ROLL_CALENDAR_PATH = roll_calendar_directory()
 DEFAULT_INSTRUMENTS = ["VIX", "VIX_mini"]
 
 # 前端合约价格陈旧超过这个天数就认为数据流断了

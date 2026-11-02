@@ -29,11 +29,12 @@ from datetime import datetime
 
 import pandas as pd
 
+from sysdata.csv.csv_roll_calendars import roll_calendar_directory
 from sysinit.futures.rollcalendars_from_db_prices_to_csv import (
     build_and_write_roll_calendar,
 )
 
-ROLL_CALENDAR_DIR = "/Users/henrik/dev/pysystemtrade/data/futures/roll_calendars_csv"
+ROLL_CALENDAR_DIR = roll_calendar_directory()
 NEW_CALENDAR_DIR = os.path.join(ROLL_CALENDAR_DIR, "new")
 
 COLUMNS = ["DATE_TIME", "current_contract", "next_contract", "carry_contract"]

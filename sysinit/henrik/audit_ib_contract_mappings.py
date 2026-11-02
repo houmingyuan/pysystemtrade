@@ -17,8 +17,9 @@ import pandas as pd
 from syscore.constants import arg_not_supplied
 from sysdata.data_blob import dataBlob
 from sysproduction.data.broker import dataBroker
+from sysdata.csv.csv_roll_calendars import roll_calendar_directory
 
-ROLL_CALENDAR_PATH = "data/futures/roll_calendars_csv"
+ROLL_CALENDAR_PATH = roll_calendar_directory()
 
 
 def front_contract_month(instrument_code: str) -> str:

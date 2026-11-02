@@ -26,10 +26,9 @@ import pandas as pd
 
 from sysdata.parquet.parquet_access import write_parquet_atomically
 
-CURRENT_DIR = "/Volumes/data/systrade/parquet/futures_contract_prices"
-BACKUP_DIR = (
-    "/Users/henrik/data/backup/fir131_before_timestamp_fix_20260925"
-    "/futures_contract_prices"
+CURRENT_DIR = os.path.expanduser("~/data/parquet/futures_contract_prices")
+BACKUP_DIR = os.path.expanduser(
+    "~/data/backup/fir131_before_timestamp_fix_20260925/futures_contract_prices"
 )
 
 MIDNIGHT = pd.Timestamp("2000-01-01 00:00:00").time()

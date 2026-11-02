@@ -31,8 +31,8 @@ import pandas as pd
 
 from sysdata.parquet.parquet_access import write_parquet_atomically
 
-NORGATE_DIR = "/Volumes/data/systrade/norgate_export"
-STORE_DIR = "/Volumes/data/systrade/parquet/futures_contract_prices"
+NORGATE_DIR = os.path.expanduser("~/data/norgate_export")
+STORE_DIR = os.path.expanduser("~/data/parquet/futures_contract_prices")
 NORGATE_HISTORY_END = pd.Timestamp("2026-09-18")
 
 

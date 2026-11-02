@@ -1,9 +1,11 @@
+import os
+
 from syscore.interactive.input import true_if_answer_is_yes
 from syscore.constants import arg_not_supplied
 
 from sysobjects.rolls import rollParameters
 from sysobjects.roll_calendars import rollCalendar
-from sysdata.csv.csv_roll_calendars import csvRollCalendarData
+from sysdata.csv.csv_roll_calendars import csvRollCalendarData, roll_calendar_directory
 from sysdata.csv.csv_roll_parameters import csvRollParametersData
 from sysdata.futures.rolls_parameters import rollParametersData
 from sysproduction.data.prices import get_valid_instrument_code_from_user, diagPrices
@@ -124,4 +126,6 @@ if __name__ == "__main__":
     instrument_code = get_valid_instrument_code_from_user(source="single")
     ## MODIFY DATAPATH IF REQUIRED
     # build_and_write_roll_calendar(instrument_code, output_datapath=arg_not_supplied)
-    build_and_write_roll_calendar(instrument_code, output_datapath="/Users/henrik/dev/pysystemtrade/data/futures/roll_calendars_csv/new")
+    build_and_write_roll_calendar(
+        instrument_code, output_datapath=os.path.join(roll_calendar_directory(), "new")
+    )

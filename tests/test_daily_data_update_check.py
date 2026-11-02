@@ -99,7 +99,8 @@ def test_stale_multiple_prices_are_flagged_past_the_tolerance():
     )
 
     assert [row[0] for row in stale_list] == ["STALE"]
-    assert stale_list[0][3] == "末端落后"
+    # 09-11 到 09-25 共 11 个交易日（09-27 是周日）
+    assert stale_list[0][3] == "末端落后 11 个交易日"
 
 
 class _KeyedDiagPrices:

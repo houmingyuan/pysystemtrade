@@ -50,12 +50,12 @@ from sysobjects.dict_of_futures_per_contract_prices import (
     dictFuturesContractFinalPrices,
 )
 from sysobjects.roll_calendars import rollCalendar
-from sysdata.csv.csv_roll_calendars import csvRollCalendarData
+from sysdata.csv.csv_roll_calendars import csvRollCalendarData, roll_calendar_directory
 from sysdata.csv.csv_roll_parameters import csvRollParametersData
 from sysproduction.data.prices import diagPrices
 
 
-ROLL_CALENDAR_PATH = "data/futures/roll_calendars_csv"
+ROLL_CALENDAR_PATH = roll_calendar_directory()
 INDEX_NAME = "current_roll_date"
 
 # rollCalendar.create_from_prices prints every row it considers; keep a lid on it

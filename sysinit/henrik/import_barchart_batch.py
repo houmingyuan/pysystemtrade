@@ -18,6 +18,7 @@ import argparse
 import glob
 import os
 import subprocess
+import sys
 
 import pandas as pd
 
@@ -37,6 +38,8 @@ from sysinit.futures.rollcalendars_from_db_prices_to_csv import (
 )
 
 ADJUSTED_PATH = "/Users/henrik/data/parquet/futures_adjusted_prices"
+# 按绝对路径和当前解释器调用，不依赖当前目录与 PATH 里的 python3
+REBUILD_SCRIPT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "rebuild_roll_calendar_from_volume.py")
 
 BARCHART_CONFIG = ConfigCsvFuturesPrices(
     input_date_index_name="Time",
@@ -96,8 +99,8 @@ def import_instrument(instrument_code: str, datapath: str, create: bool) -> str:
     try:
         subprocess.run(
             [
-                "python3",
-                "sysinit/henrik/rebuild_roll_calendar_from_volume.py",
+                sys.executable,
+                REBUILD_SCRIPT,
                 "--instrument",
                 instrument_code,
             ],

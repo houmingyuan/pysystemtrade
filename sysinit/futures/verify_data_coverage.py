@@ -21,12 +21,12 @@ from pathlib import Path
 
 import pandas as pd
 
-from sysdata.csv.csv_roll_calendars import csvRollCalendarData
+from sysdata.csv.csv_roll_calendars import csvRollCalendarData, roll_calendar_directory
 from sysproduction.data.prices import diagPrices
 
 
 # Default paths - adjust for your PST installation
-ROLL_CAL_DIR = "data/futures/roll_calendars_csv"
+ROLL_CAL_DIR = roll_calendar_directory()
 
 # How many days behind "today" is acceptable for adjusted prices
 ACCEPTABLE_LAG_DAYS = 30

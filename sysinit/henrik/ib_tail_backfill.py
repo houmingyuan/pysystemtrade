@@ -15,7 +15,9 @@ IB 尾部补数：把新品种从「备份内容截止日」接到最新。
 """
 
 import argparse
+import os
 import subprocess
+import sys
 
 import pandas as pd
 
@@ -31,6 +33,8 @@ from sysinit.futures.multipleprices_from_db_prices_and_csv_calendars_to_db impor
 )
 
 ADJUSTED_PATH = "/Users/henrik/data/parquet/futures_adjusted_prices"
+# 按绝对路径和当前解释器调用，不依赖当前目录与 PATH 里的 python3
+REBUILD_SCRIPT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "rebuild_roll_calendar_from_volume.py")
 
 
 def last_date_for(instrument_code: str):
@@ -81,8 +85,8 @@ def backfill(instrument_code: str, max_contracts: int = 0) -> str:
     # 不重建的话 multiple prices 仍会停在备份截止日。
     subprocess.run(
         [
-            "python3",
-            "sysinit/henrik/rebuild_roll_calendar_from_volume.py",
+            sys.executable,
+            REBUILD_SCRIPT,
             "--instrument",
             instrument_code,
         ],

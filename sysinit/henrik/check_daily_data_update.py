@@ -16,7 +16,7 @@ multiple prices 没跟上合约价格，都会静默表现成「今天的数据�
 
 用法：
     python sysinit/henrik/check_daily_data_update.py             # 用今天（或最近一份）日志
-    python sysinit/henrik/check_daily_data_update.py --log /Volumes/data/systrade/log/update_20260928.log
+    python sysinit/henrik/check_daily_data_update.py --log ~/data/log/update_20260928.log
     python sysinit/henrik/check_daily_data_update.py --max-spikes 5 --max-stale-days 3
     python sysinit/henrik/check_daily_data_update.py --skip-tail-check
 """
@@ -30,7 +30,7 @@ from datetime import date
 
 import pandas as pd
 
-DEFAULT_LOG_DIR = "/Volumes/data/systrade/log"
+DEFAULT_LOG_DIR = os.path.expanduser("~/data/log")
 LOG_FILE_PATTERN = "update_*.log"
 
 SPIKE_PATTERN = re.compile(

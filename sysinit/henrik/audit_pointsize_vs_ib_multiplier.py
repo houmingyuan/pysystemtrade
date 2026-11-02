@@ -21,7 +21,7 @@ import pandas as pd
 
 INSTRUMENT_CONFIG = "data/futures/csvconfig/instrumentconfig.csv"
 IB_CONFIG = "sysbrokers/IB/config/ib_config_futures.csv"
-MULTIPLE_PRICES_DIR = "/Volumes/data/systrade/parquet/futures_multiple_prices"
+MULTIPLE_PRICES_DIR = os.path.expanduser("~/data/parquet/futures_multiple_prices")
 
 
 def main(argv=None) -> int:

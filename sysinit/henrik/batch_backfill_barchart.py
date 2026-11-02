@@ -19,6 +19,7 @@ import argparse
 import glob
 import os
 import subprocess
+import sys
 
 import pandas as pd
 
@@ -35,6 +36,8 @@ from sysinit.futures.multipleprices_from_db_prices_and_csv_calendars_to_db impor
 
 CP_PATH = "/Users/henrik/data/parquet/futures_contract_prices"
 INSTRUMENT_CONFIG = "data/futures/csvconfig/instrumentconfig.csv"
+# 按绝对路径和当前解释器调用，不依赖当前目录与 PATH 里的 python3
+REBUILD_SCRIPT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "rebuild_roll_calendar_from_volume.py")
 
 BARCHART_CONFIG = ConfigCsvFuturesPrices(
     input_date_index_name="Time",
@@ -89,8 +92,8 @@ def backfill(instrument_code: str, datapath: str) -> dict:
     )
     subprocess.run(
         [
-            "python3",
-            "sysinit/henrik/rebuild_roll_calendar_from_volume.py",
+            sys.executable,
+            REBUILD_SCRIPT,
             "--instrument",
             instrument_code,
         ],

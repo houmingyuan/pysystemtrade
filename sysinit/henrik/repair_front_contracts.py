@@ -16,7 +16,7 @@ import sys
 import pandas as pd
 
 from syscore.constants import arg_not_supplied
-from sysdata.csv.csv_roll_calendars import csvRollCalendarData
+from sysdata.csv.csv_roll_calendars import csvRollCalendarData, roll_calendar_directory
 from sysdata.csv.csv_roll_parameters import csvRollParametersData
 from sysinit.futures.build_roll_calendars import adjust_to_price_series
 from sysinit.futures.build_roll_calendars import align_prices_by_date
@@ -30,7 +30,7 @@ from sysproduction.data.prices import diagPrices
 ## multipleprices_from_db_prices_and_csv_calendars_to_db 在 import 时会连库（各约 30s），
 ## 所以这两个依赖在真正用到的函数里再 import。
 
-ROLL_CALENDAR_PATH = "data/futures/roll_calendars_csv"
+ROLL_CALENDAR_PATH = roll_calendar_directory()
 VOLUME_LOOKBACK_DAYS = 5
 
 _diag_prices = None
