@@ -10,9 +10,14 @@ carry 合约**按 rollconfig 的 CarryOffset 推导**（-1 = 上月、+1 = 下�
 
 对单日成交量毛刺用 rolling(3).median() 平滑；只接受向前（月份变大）的切换。
 
+默认只在现有日历末尾追加换月，不改写历史行：重建只从 --min-date 起算，整体替换会把
+更早的历史截掉（2026-10-21 的失滚重建就把 CAC、NIKKEI-SGX 截到了 2000 年）。
+新品种首次构建、或确实要替换现有日历时加 --full。
+
 用法：
     python sysinit/henrik/rebuild_roll_calendar_from_volume.py --instrument VIX --dry-run
     python sysinit/henrik/rebuild_roll_calendar_from_volume.py --instrument VIX
+    python sysinit/henrik/rebuild_roll_calendar_from_volume.py --instrument VIX --full
 """
 import argparse
 import glob
@@ -137,6 +142,37 @@ def carry_contract_for_held(held_contract: int, roll_parameters, available=None)
     return carry_contract
 
 
+def extend_existing_calendar(existing: pd.DataFrame, rebuilt: pd.DataFrame) -> pd.DataFrame:
+    """
+    把重建结果里「换入合约晚于现有最后持有合约」的换月接到现有日历末尾，历史行不动。
+
+    接缝必须连续：第一条追加行的 current 等于现有最后一行的 next，且日期更晚；
+    接不上就抛 ValueError，宁可不写也不写出断链的日历。
+    """
+    if existing.empty:
+        return rebuilt
+
+    last_held = int(existing.iloc[-1].next_contract)
+    tail = rebuilt[rebuilt.next_contract.astype(int) > last_held]
+    if tail.empty:
+        return existing
+
+    first_current = int(tail.iloc[0].current_contract)
+    if first_current != last_held or tail.index[0] <= existing.index[-1]:
+        raise ValueError(
+            "重建结果与现有日历接不上：现有最后持有 %s（%s 换入），重建的第一条追加行为 %s -> %s（%s）"
+            % (
+                last_held,
+                existing.index[-1].date(),
+                first_current,
+                int(tail.iloc[0].next_contract),
+                tail.index[0].date(),
+            )
+        )
+
+    return pd.concat([existing, tail])
+
+
 def check_chain(calendar: pd.DataFrame) -> list:
     breaks = []
     for i in range(len(calendar) - 1):
@@ -158,18 +194,36 @@ def main(argv=None) -> int:
     parser.add_argument("--instrument", required=True)
     parser.add_argument("--min-date", default="2000-01-01")
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument(
+        "--full",
+        action="store_true",
+        help="用重建结果整体替换现有日历（默认只在末尾追加，不改写历史行）",
+    )
     args = parser.parse_args(argv)
 
-    calendar = calendar_rows_from_volume(args.instrument, args.min_date)
-    if calendar.empty:
+    rebuilt = calendar_rows_from_volume(args.instrument, args.min_date)
+    if rebuilt.empty:
         print("没有可用数据，未生成日历")
         return 1
 
     calendar_data = csvRollCalendarData(ROLL_CALENDAR_PATH)
     existing = calendar_data.get_roll_calendar(args.instrument)
 
-    print("%s：现有日历 %d 行 -> 按成交量重建 %d 行（%s 起）"
-          % (args.instrument, len(existing), len(calendar), args.min_date))
+    if args.full:
+        calendar = rebuilt
+    else:
+        try:
+            calendar = extend_existing_calendar(existing, rebuilt)
+        except ValueError as error:
+            print("未写入：%s" % error)
+            return 1
+        if len(calendar) == len(existing) and not existing.empty:
+            print("%s：没有新的换月，未写入" % args.instrument)
+            return 0
+
+    print("%s：现有日历 %d 行 -> %s后 %d 行（按成交量重建 %d 行，%s 起）"
+          % (args.instrument, len(existing), "整体替换" if args.full else "末尾追加",
+             len(calendar), len(rebuilt), args.min_date))
     print(calendar.tail(6).to_string())
     breaks = check_chain(calendar)
     print("链条断点：%d" % len(breaks))

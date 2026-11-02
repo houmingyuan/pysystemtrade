@@ -97,13 +97,10 @@ def import_instrument(instrument_code: str, datapath: str, create: bool) -> str:
     # 优先成交量法重建日历；成交量缺失（季度挂牌、Barchart 无 volume）时回退到
     # rollconfig 参数法，否则新品种的链条永远建不起来（GILT2/GILT5 就是这种情形）。
     try:
+        # 全新品种首次构建时整体替换；已有品种只在日历末尾追加，不改写历史
         subprocess.run(
-            [
-                sys.executable,
-                REBUILD_SCRIPT,
-                "--instrument",
-                instrument_code,
-            ],
+            [sys.executable, REBUILD_SCRIPT, "--instrument", instrument_code]
+            + (["--full"] if create else []),
             check=True,
             capture_output=True,
         )
