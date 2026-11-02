@@ -1,0 +1,6 @@
+# 两台机器都需要的基础软件
+- name: 基础软件
+  hosts: all
+  gather_facts: false
+  roles:
+    - homebrew_packages

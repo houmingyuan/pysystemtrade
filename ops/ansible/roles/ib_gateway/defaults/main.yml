@@ -1,0 +1,6 @@
+# 设置目录里可再生的内容：日志、加密日志、内嵌浏览器缓存
+ib_settings_excludes:
+  - "*.log"
+  - "*.ibgzenc"
+  - ftSettings/
+  - tvChartSettings/

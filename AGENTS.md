@@ -49,3 +49,28 @@
   - teamId `2fae9868-2e43-4bb0-b3ce-ca77829195ad`
   - projectId（Future Trading）`80f281b2-7c27-4998-9e80-7ea04b477b73`
   - stateId：Todo `c6fca1c8-ea50-4775-8b36-c388f78468d9`、In Progress `d7cf0fdf-a533-42c2-b7d2-b9e3076ac262`、In Review `7f13bd76-e850-426c-ac00-d3989e1de54b`、Done `39352f93-f5b1-4f51-bbc8-9a61bda04a48`
+
+## 运维约定（Ansible）
+
+**核心原则：生产机 `builder-mac-mini` 上的安装、配置、同步和服务启停，一律写成 `ops/ansible/` 下的
+playbook 来执行，不在生产机上手敲命令。** 开发机是控制机，在 `ops/ansible` 目录下运行；用法见
+`ops/ansible/README.md`。
+
+为什么：手工操作没有记录，也无法复核生产机现状；playbook 可以先试跑看差异，事后再跑一遍就能确认机器
+与仓库描述一致。
+
+- **先试跑再执行**：会改动机器的 playbook 先加 `--check` 运行（diff 已默认开启），把结果给用户看，
+  用户确认后才去掉 `--check` 正式执行。`playbooks/check.yml` 只读，随时可以跑。
+- **幂等**：正式执行后再 `--check` 一遍，应为 `changed=0`。只能执行一次的任务（例如首次导入）要在
+  任务名里写明，并用 `creates`、`when` 等条件防止重复执行。
+- **手工改动要回写**：紧急情况下在生产机上手工处理过的，事后补进对应 role，并用 `--check` 确认
+  `changed=0`。
+- **不放进 playbook 自动执行**：IB 登录与二次验证、下单、发邮件等对外动作，以及删除数据
+  （`--delete`、`rm`、`mongorestore --drop` 之类）。确需执行时单独征得用户同意。
+- **写外置卷前先校验卷 UUID**（`group_vars/all.yml` 的 `prod_volume_uuid`），不一致立即失败，
+  防止卷没挂载时写进内置盘上的同名目录。
+- **密钥不进仓库**：`private/` 的内容不写进 playbook 或变量文件；处理密钥的任务加 `no_log: true`
+  和 `diff: false`（运行日志 `~/Library/Logs/systrade/ansible.log` 会记录 diff）。
+- 常量（路径、端口、卷 UUID、Gateway 实例）只在 `group_vars/all.yml` 定义；新增操作就新建或扩展
+  role，playbook 只负责组合 role。
+- 需要 `sudo` 的任务用 `become`，由用户在自己的终端加 `--ask-become-pass` 执行，agent 不保存、不索要密码。

@@ -1,0 +1,66 @@
+# 只读体检：不改动任何东西，加不加 --check 结果都一样
+- name: 生产机体检
+  hosts: prod
+  gather_facts: false
+  tasks:
+    - name: 外置卷
+      ansible.builtin.command: diskutil info {{ prod_volume_mount }}
+      register: volume
+      changed_when: false
+      check_mode: false
+      failed_when: false
+
+    - name: 磁盘空间
+      # 内置盘看 Data 卷：/ 是只读的系统快照，用量不代表真实情况
+      ansible.builtin.shell: |
+        df -h /System/Volumes/Data {{ prod_volume_mount }} | awk 'NR > 1 {print $NF, "可用", $4, "已用", $5}'
+      register: disk
+      changed_when: false
+      check_mode: false
+      failed_when: false
+
+    - name: IB Gateway 安装
+      ansible.builtin.stat:
+        path: "{{ home }}/Applications/{{ item.app_dir }}/{{ item.app_bundle }}"
+      loop: "{{ ib_gateway_instances }}"
+      loop_control:
+        label: "{{ item.app_dir }}"
+      register: gateways
+
+    - name: IB API 端口
+      ansible.builtin.command: lsof -nP -iTCP:{{ item.value }} -sTCP:LISTEN
+      loop: "{{ ib_api_ports | dict2items }}"
+      loop_control:
+        label: "{{ item.key }} {{ item.value }}"
+      register: ports
+      changed_when: false
+      check_mode: false
+      failed_when: false
+
+    - name: 进程
+      ansible.builtin.command: pgrep -fl "IB Gateway|mongod"
+      register: processes
+      changed_when: false
+      check_mode: false
+      failed_when: false
+
+    - name: 软件与系统设置
+      ansible.builtin.shell: |
+        {{ gnu_rsync }} --version | head -1
+        {{ homebrew_bin_dir }}/mongod --version | head -1
+        awk '$1 == "dbPath:" {print "mongod dbPath", $2}' /opt/homebrew/etc/mongod.conf
+        pmset -g | grep -E "^ autorestart "
+      register: software
+      changed_when: false
+      check_mode: false
+      failed_when: false
+
+    - name: 汇总
+      ansible.builtin.debug:
+        msg:
+          - "外置卷 {{ prod_volume_mount }}：{{ '已挂载，UUID 正确' if prod_volume_uuid in volume.stdout else '未挂载或 UUID 不符' }}"
+          - "{{ disk.stdout_lines }}"
+          - "IB Gateway：{% for r in gateways.results %}{{ r.item.name }} {{ '已安装' if r.stat.exists else '缺失' }}{% if not loop.last %}，{% endif %}{% endfor %}"
+          - "IB 端口：{% for r in ports.results %}{{ r.item.key }} {{ r.item.value }} {{ '监听中' if r.rc == 0 else '未监听' }}{% if not loop.last %}，{% endif %}{% endfor %}"
+          - "{{ processes.stdout_lines | map('truncate', 100, true) | list if processes.stdout else '进程：无 IB Gateway / mongod' }}"
+          - "{{ software.stdout_lines }}"

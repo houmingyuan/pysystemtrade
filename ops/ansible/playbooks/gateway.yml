@@ -1,0 +1,6 @@
+# 生产机上的两个 IB Gateway 实例（纸面 4002、实盘 4001）
+- name: IB Gateway
+  hosts: prod
+  gather_facts: false
+  roles:
+    - ib_gateway

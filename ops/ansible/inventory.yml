@@ -1,0 +1,13 @@
+# dev 是本机（同时是 Ansible 控制机），prod 是生产机；见 docs/production_migration_cn.md
+all:
+  children:
+    dev:
+      hosts:
+        localhost:
+          ansible_connection: local
+          ansible_python_interpreter: "{{ ansible_playbook_python }}"
+    prod:
+      hosts:
+        builder-mac-mini:
+          ansible_user: henrik
+          ansible_python_interpreter: /Users/henrik/miniconda3/bin/python3

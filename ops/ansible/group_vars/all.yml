@@ -1,0 +1,32 @@
+# 全部机器共用的常量只在这里定义（docs/production_migration_cn.md 第 2、3 节）
+home: /Users/henrik
+homebrew_bin_dir: /opt/homebrew/bin
+# synchronize 在本机一端调用的 rsync（系统自带的 /usr/bin/rsync 是 openrsync）。
+# synchronize 读这个变量时不展开模板，所以写字面路径，其他地方引用 gnu_rsync。
+ansible_rsync_path: /opt/homebrew/bin/rsync
+gnu_rsync: "{{ ansible_rsync_path }}"
+
+prod_volume_mount: /Volumes/cv
+prod_volume_uuid: 517D6A79-28DD-47FA-8C58-D4120188387A
+prod_root: /Volumes/cv/systrade
+
+# IB Gateway API 端口：纸面账户取期货数据和交易，实盘账户只取 spot FX
+ib_api_ports:
+  paper: 4002
+  live: 4001
+
+# 两个 IB Gateway 实例，约定见 sysproduction/linux/scripts/start_ib_gateways（FIR-170）
+ib_gateway_instances:
+  - name: paper
+    app_dir: IB Gateway 10.50
+    app_bundle: IB Gateway 10.50.app
+    settings_dir: Jts
+    app_excludes: []
+  - name: live
+    app_dir: IB Gateway 10.50 Live
+    app_bundle: IB Gateway 10.50.app
+    settings_dir: Jts-live
+    jts_config_dir: /Users/henrik/Jts-live
+    # 开发机的实盘实例目录里套着一份多余的完整副本，不复制
+    app_excludes:
+      - /IB Gateway 10.50/

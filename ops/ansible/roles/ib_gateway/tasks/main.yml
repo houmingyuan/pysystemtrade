@@ -1,0 +1,51 @@
+# 安装文件与设置从开发机同步：开发机上是现成可用的实例。登录与二次验证必须人工完成。
+# synchronize 把 rsync_opts 拼成一行命令再拆分，所以每个排除项都要 quote，否则带空格的路径会被拆开。
+
+- name: 同步安装目录
+  ansible.posix.synchronize:
+    src: "{{ lookup('env', 'HOME') }}/Applications/{{ item.app_dir }}/"
+    dest: "{{ home }}/Applications/{{ item.app_dir }}/"
+    archive: true
+    checksum: true
+    delete: false
+    rsync_path: "{{ gnu_rsync }}"
+    rsync_opts: "{{ item.app_excludes | map('regex_replace', '^', '--exclude=') | map('quote') | list }}"
+  loop: "{{ ib_gateway_instances }}"
+  loop_control:
+    label: "{{ item.app_dir }}"
+
+- name: 同步设置目录（不含日志与缓存）
+  ansible.posix.synchronize:
+    src: "{{ lookup('env', 'HOME') }}/{{ item.settings_dir }}/"
+    dest: "{{ home }}/{{ item.settings_dir }}/"
+    archive: true
+    checksum: true
+    delete: false
+    rsync_path: "{{ gnu_rsync }}"
+    rsync_opts: "{{ ib_settings_excludes | map('regex_replace', '^', '--exclude=') | map('quote') | list }}"
+  loop: "{{ ib_gateway_instances }}"
+  loop_control:
+    label: "{{ item.settings_dir }}"
+
+- name: 实盘实例使用独立的设置目录
+  ansible.builtin.lineinfile:
+    path: "{{ home }}/Applications/{{ item.app_dir }}/ibgateway.vmoptions"
+    line: "-DjtsConfigDir={{ item.jts_config_dir }}"
+    insertafter: "^### keep on update"
+  loop: "{{ ib_gateway_instances | selectattr('jts_config_dir', 'defined') | list }}"
+  loop_control:
+    label: "{{ item.app_dir }}"
+
+- name: 校验应用签名（只读）
+  ansible.builtin.command:
+    argv:
+      - codesign
+      - --verify
+      - --deep
+      - --strict
+      - "{{ home }}/Applications/{{ item.app_dir }}/{{ item.app_bundle }}"
+  changed_when: false
+  check_mode: false
+  loop: "{{ ib_gateway_instances }}"
+  loop_control:
+    label: "{{ item.app_dir }}"
